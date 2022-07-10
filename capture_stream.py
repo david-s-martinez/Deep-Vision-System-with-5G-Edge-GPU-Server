@@ -41,6 +41,8 @@ first_flag = True
 use_cuda = True
 url_video = 'http://10.41.0.4:8080/?action=stream'
 url_detections = 'http://10.41.0.4:5000/detections'
+# url_video = 'http://10.41.0.4:8080/?action=stream'
+# url_detections = 'http://192.168.100.43:5000/detections'
 
 def resizeAndPad(img, size, padColor=0):
 
@@ -178,7 +180,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,class_names=None, co
                     index_of_marker = point_inside_prlgm(center_x, center_y, image_point)
 
             # y=y-80
-            centroids.append([x1, x2])
+            centroids.append([x1, y1])
             rectangles.append([x2, y2])
             labels.append(int(cls_id))
             confidences.append(int(cls_conf * 100))
@@ -199,8 +201,10 @@ frame2 = None
 def cam_reader():
     global frame
     global frame2
-    # cap = cv2.VideoCapture(url_video)
-    cap = cv2.VideoCapture(2)
+    cap = cv2.VideoCapture(url_video)
+    # cap = cv2.VideoCapture(2)
+    # cap.set(3, 640)
+    # cap.set(4, 480)
     while True:
         try:
             ret, frame = cap.read()
@@ -232,12 +236,12 @@ corners = {
     }
 
 pd = PlaneDetection(calib_path, corners)
-net = cv2.dnn.readNet("yolo.weights", "config.cfg")
-net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+# net = cv2.dnn.readNet("yolo.weights", "config.cfg")
+# net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+# net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
+# layer_names = net.getLayerNames()
+# output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
 index_of_marker = -1
 first_tag = True
@@ -251,7 +255,8 @@ m.load_weights('yolo.weights')
 
 if use_cuda:
     m.cuda()
-class_names = ['wheel','rim','tire']
+# class_names = ['wheel','rim','tire']
+class_names = ['DISK1','TIRE','WHEEL1']
 
 while True:
     start_time = time.time()
@@ -281,11 +286,11 @@ while True:
     boxes = do_detect(m, frame, 0.5, 0.6, use_cuda)
     frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker ,class_names=class_names)
     print(data)
-    # try:
-    #     server_return = requests.post(url_detections, json=data)
-    #     print('[INFO]: Detections posted.')
-    # except:
-    #     break
+    try:
+        server_return = requests.post(url_detections, json=data)
+        print('[INFO]: Detections posted.')
+    except:
+        break
 
     print("FPS:" + str(1.0 / (time.time() - start_time)))
 

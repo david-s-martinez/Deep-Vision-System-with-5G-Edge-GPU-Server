@@ -30,8 +30,8 @@ class PlaneDetection:
         self.define_boxes_for_tags()
         self.rotate_original_pts()
 
-        self.camera_matrix = np.loadtxt(calib_path+'camera_matrix_l.txt', delimiter=',')
-        self.camera_distortion = np.loadtxt(calib_path+'distortion_l.txt', delimiter=',')
+        self.camera_matrix = np.loadtxt(calib_path+'camera_matrix.txt', delimiter=',')
+        self.camera_distortion = np.loadtxt(calib_path+'distortion.txt', delimiter=',')
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.parameters = cv2.aruco.DetectorParameters_create()
     
