@@ -14,7 +14,7 @@ class PlaneDetection:
         self.corners = corners
         self.box_z = box_z
         self.id_to_find  = 0
-        self.marker_size  = 2 #cm
+        self.marker_size  = 2.91 #cm
         self.homography = None
         
         self.tag_boxes = {}

@@ -115,18 +115,18 @@ def point_inside_prlgm(object_x, object_y, points):
         i += 1
     return None
 
-
-def plot_boxes(img, boxes,image_point_dict, index_of_marker,class_names=None, color=None):
-    img = np.copy(img)
+def get_color(c, x, max_val):
     colors = np.array([[1, 0, 1], [0, 0, 1], [0, 1, 1], [0, 1, 0], [1, 1, 0], [1, 0, 0]], dtype=np.float32)
+    ratio = float(x) / max_val * 5
+    i = int(math.floor(ratio))
+    j = int(math.ceil(ratio))
+    ratio = ratio - i
+    r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
+    return int(r * 255)
 
-    def get_color(c, x, max_val):
-        ratio = float(x) / max_val * 5
-        i = int(math.floor(ratio))
-        j = int(math.ceil(ratio))
-        ratio = ratio - i
-        r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
-        return int(r * 255)
+def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=None, color=None):
+    img = np.copy(img)
+
     centroids = []
     rectangles = []
     labels = []
@@ -185,7 +185,15 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,class_names=None, co
             labels.append(int(cls_id))
             confidences.append(int(cls_conf * 100))
             index_marker.append(index_of_marker)
-        
+        if homog is not None:
+                centroid = (center_x,center_y+40)
+                new_centroid = np.append(centroid,1)
+                world_centroid = homog.dot(new_centroid)
+                world_centroid = world_centroid[0], world_centroid[1]
+                cv2.putText(img, 
+                            str(round(world_centroid[0],2)) +','+ 
+                            str(round(world_centroid[1],2)), centroid, 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
         img = cv2.rectangle(img, (x1, y1), (x2, y2), rgb, bbox_thick)
     data = {
         'centroids': centroids,
@@ -236,23 +244,14 @@ corners = {
     'bl' :'3'
     }
 
-pd = PlaneDetection(calib_path, corners)
-# net = cv2.dnn.readNet("yolo.weights", "config.cfg")
-# net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-# net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-
-# layer_names = net.getLayerNames()
-# output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
-
 index_of_marker = -1
 first_tag = True
 
+pd = PlaneDetection(calib_path, corners)
+
 m = Darknet('config.cfg')
-
 m.print_network()
-
 m.load_weights('yolo.weights')
-# print('Loading weights from %s... Done!' % (weightfile))
 
 if use_cuda:
     m.cuda()
@@ -277,15 +276,9 @@ while True:
     '''
     *********************** AI PART ***********************
     '''
-    centroids = []
-    rectangles = []
-    labels = []
-    confidences = []
-    index_marker = []
-
     # frame = resizeAndPad(frame, (416, 416), 0)
     boxes = do_detect(m, frame, 0.5, 0.6, use_cuda)
-    frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker ,class_names=class_names)
+    frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker, homography ,class_names=class_names)
     print(data)
     try:
         server_return = requests.post(url_detections, json=data)
