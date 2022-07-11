@@ -188,10 +188,14 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
                 new_centroid = np.append(centroid,1)
                 world_centroid = homog.dot(new_centroid)
                 world_centroid = world_centroid[0], world_centroid[1]
+                pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
+                pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
                 cv2.putText(img, 
-                            str(round(world_centroid[0],2)) +','+ 
-                            str(round(world_centroid[1],2)), (centroid[0]-40,centroid[1]), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                            pos_str_x, (centroid[0]-40,centroid[1]), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+                cv2.putText(img, 
+                            pos_str_y, (centroid[0]-40,centroid[1]+20), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
         img = cv2.rectangle(img, (x1, y1), (x2, y2), rgb, bbox_thick)
     data = {
         'centroids': centroids,
