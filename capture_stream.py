@@ -217,7 +217,8 @@ def cam_reader():
 
         if(frame2 is None):
             frame2 = frame
-        cv2.imshow('frame', frame2)
+        # cv2.imshow('frame', frame2)
+        cv2.imshow('frame', cv2.resize(frame2, (1380,1020)))
         key = cv2.waitKey(1)
         if key == 27:
             break
