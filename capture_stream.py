@@ -264,8 +264,8 @@ m.load_weights('yolo.weights')
 
 if use_cuda:
     m.cuda()
-# class_names = ['wheel','rim','tire']
-class_names = ['DISK1','TIRE','WHEEL1']
+
+class_names = ['DISK','TIRE','WHEEL']
 
 while True:
     start_time = time.time()
