@@ -140,7 +140,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
         y1 = int(box[1] * height)
         x2 = int(box[2] * width)
         y2 = int(box[3] * height)
-        center_x, center_y = int(box[0] * width), int(box[1] * height)
+        
         bbox_thick = int(0.6 * (height + width) / 600)
         if color:
             rgb = color
@@ -160,10 +160,9 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
             msg = str(class_names[cls_id])+" "+str(round(cls_conf,3))
             t_size = cv2.getTextSize(msg, 0, 0.7, thickness=bbox_thick // 2)[0]
             c1, c2 = (x1,y1), (x2, y2)
+            centroid = ((x1+x2)//2,(y1+y2)//2)
             c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
-            # print(c3)
-            w, h = int(box[2] * width), int(box[3] * height)
-            x, y = center_x - w // 2, center_y - h // 2
+        
             cv2.rectangle(img, (x1,y1), c3, rgb, -1)
             img = cv2.putText(img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
             if pd.box_verts_update:
@@ -177,7 +176,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
                         image_point_dict[corners['br']][1],
                         image_point_dict[corners['bl']][1]
                     ]
-                    index_of_marker = point_inside_prlgm(center_x, center_y, image_point)
+                    index_of_marker = point_inside_prlgm(centroid[0],centroid[1], image_point)
 
             # y=y-80
             centroids.append([x1, y1])
@@ -186,13 +185,12 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
             confidences.append(int(cls_conf * 100))
             index_marker.append(index_of_marker)
         if homog is not None:
-                centroid = (center_x,center_y+40)
                 new_centroid = np.append(centroid,1)
                 world_centroid = homog.dot(new_centroid)
                 world_centroid = world_centroid[0], world_centroid[1]
                 cv2.putText(img, 
                             str(round(world_centroid[0],2)) +','+ 
-                            str(round(world_centroid[1],2)), centroid, 
+                            str(round(world_centroid[1],2)), (centroid[0]-40,centroid[1]), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
         img = cv2.rectangle(img, (x1, y1), (x2, y2), rgb, bbox_thick)
     data = {
@@ -206,9 +204,12 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
 
 frame = None
 frame2 = None
+warp = None
+
 def cam_reader():
     global frame
     global frame2
+    global warp
     cap = cv2.VideoCapture(url_video)
     # cap = cv2.VideoCapture(2)
     # cap.set(3, 640)
@@ -218,6 +219,7 @@ def cam_reader():
             ret, frame = cap.read()
             # frame = resizeAndPad(frame, (416, 416), 0)
             height, width, channels = frame.shape
+            
             print(frame.shape)
         except:
             print("CAMERA COULD NOT BE OPEN")
@@ -227,6 +229,9 @@ def cam_reader():
             frame2 = frame
         # cv2.imshow('frame', frame2)
         cv2.imshow('frame', cv2.resize(frame2, (1380,1020)))
+        if warp is not None:
+            cv2.imshow('warp', warp)
+
         key = cv2.waitKey(1)
         if key == 27:
             break
@@ -268,8 +273,8 @@ while True:
     # print(image_point_dict)
     
     
-    homography = pd.compute_homog(w_updated_pts=True)
-    # frame_warp = pd.compute_perspective_trans(frame, w_updated_pts=True)
+    homography = pd.compute_homog(w_updated_pts=False)
+    warp = pd.compute_perspective_trans(frame, w_updated_pts=False)
     frame2 = frame
 
     start_time2 = time.time()
