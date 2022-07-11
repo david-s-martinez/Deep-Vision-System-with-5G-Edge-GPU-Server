@@ -273,9 +273,8 @@ while True:
     # print(image_point_dict)
     
     
-    homography = pd.compute_homog(w_updated_pts=False)
-    warp = pd.compute_perspective_trans(frame, w_updated_pts=False)
-    frame2 = frame
+    homography = pd.compute_homog(w_updated_pts=True)
+    warp = pd.compute_perspective_trans(frame, w_updated_pts=True)
 
     start_time2 = time.time()
     '''
@@ -284,6 +283,7 @@ while True:
     # frame = resizeAndPad(frame, (416, 416), 0)
     boxes = do_detect(m, frame, 0.5, 0.6, use_cuda)
     frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker, homography ,class_names=class_names)
+    frame2 = frame
     print(data)
     try:
         server_return = requests.post(url_detections, json=data)
