@@ -214,7 +214,7 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
     index_of_marker = -1
     first_tag = True
 
-    pd = PlaneDetection(calib_path, corners)
+    pd = PlaneDetection(calib_path, corners, marker_size=2.92, tag_scaling=0.37)
 
     m = Darknet('config.cfg')
     m.print_network()
@@ -231,23 +231,25 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
         '''
         *********************** ARUCO  ***********************
         '''
-        frame = percept_in_conn.recv()
-        pd.detect_tags_3D(frame)
+        raw_frame = percept_in_conn.recv()
+        frame_detect = raw_frame.copy()
+        pd.detect_tags_3D(frame_detect)
         image_point_dict = pd.box_verts_update
         # print(image_point_dict)
         
         
         homography = pd.compute_homog(w_updated_pts=True)
-        # warp = pd.compute_perspective_trans(frame, w_updated_pts=True)
+        warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True)
         '''
         *********************** AI PART ***********************
         '''
-        # frame = resizeAndPad(frame, (416, 416), 0)
-        boxes = do_detect(m, frame, 0.47, 0.6, use_cuda)
-        frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
+        # padded = resizeAndPad(raw_frame, (416, 416), 0)
+        boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
+        frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
         # print(data)
         percept_out_conn.send(data)
-        cv2.imshow('frame', cv2.resize(frame, (1380,1020)))
+        cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
+        # cv2.imshow('raw_frame', padded)
         if warp is not None:
             cv2.imshow('warp', warp)
 
@@ -256,16 +258,16 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
             break
         print("FPS:" + str(1.0 / (time.time() - start_time)))
 
-def send_detections(send_detect_in_conn, url_detections):
+def post_detections(send_detect_in_conn, url_detections):
     while True:
         data = send_detect_in_conn.recv()
-        if data:
-            print(data)
-            try:
-                server_return = requests.post(url_detections, json=data)
-                print('[INFO]: Detections posted.')
-            except:
-                break
+        
+        print(data)
+        try:
+            server_return = requests.post(url_detections, json=data)
+            print('[INFO]: Detections posted.')
+        except:
+            break
 
 if __name__ == '__main__':
     # marker_size = 2.91  # cm
@@ -282,13 +284,13 @@ if __name__ == '__main__':
     
     stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, url_video))
     rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn))
-    send_detect_process = Process(target=send_detections, args=(send_detect_in_conn,url_detections))
+    post_detect_process = Process(target=post_detections, args=(send_detect_in_conn,url_detections))
     # start the receiver
     stream_reader_process.start()
     rob_percept_process.start()
-    send_detect_process.start()
+    post_detect_process.start()
     # wait for all processes to finish
     rob_percept_process.join()
     stream_reader_process.kill()
-    send_detect_process.kill()
+    post_detect_process.kill()
     
