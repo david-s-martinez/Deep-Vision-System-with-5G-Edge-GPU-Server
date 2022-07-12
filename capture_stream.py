@@ -17,32 +17,8 @@ import cv2
 import math
 import numpy as np
 from plane_computation.plane_detection import PlaneDetection
-
-ONLINE = 1
-
-X = 0
-Y = 1
-ROTATION = 0
-TRANSFORM = 1
-
-marker_size = 2.91  # cm
-HEIGHT_CUBE = 3
-grid_w = 28.4
-# grid_w = 35
-grid_h = 12.6
-font = cv2.FONT_HERSHEY_SIMPLEX
-
-camera_matrix = np.loadtxt('camera_matrix.txt', delimiter=',')
-camera_distortion = np.loadtxt('distortion.txt', delimiter=',')
-
-aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-parameters = cv2.aruco.DetectorParameters_create()
-first_flag = True
-use_cuda = True
-url_video = 'http://10.41.0.4:8080/?action=stream'
-url_detections = 'http://10.41.0.4:5000/detections'
-# url_video = 'http://10.41.0.4:8080/?action=stream'
-# url_detections = 'http://192.168.100.43:5000/detections'
+from multiprocessing import Process
+from multiprocessing import Pipe
 
 def resizeAndPad(img, size, padColor=0):
 
@@ -86,6 +62,8 @@ def resizeAndPad(img, size, padColor=0):
     return scaled_img
 
 def point_inside_prlgm(object_x, object_y, points):
+    X = 0
+    Y = 1
     center_up = [int(points[4][X] + points[5][X]) // 2, int(points[4][Y] + points[5][Y]) // 2]
     center_right = [int(points[5][X] + points[6][X]) // 2, int(points[5][Y] + points[6][Y]) // 2]
     center_bott = [int(points[6][X] + points[7][X]) // 2, int(points[6][Y] + points[7][Y]) // 2]
@@ -124,7 +102,7 @@ def get_color(c, x, max_val):
     r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
     return int(r * 255)
 
-def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=None, color=None):
+def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_names=None, color=None):
     img = np.copy(img)
 
     centroids = []
@@ -165,7 +143,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
         
             cv2.rectangle(img, (x1,y1), c3, rgb, -1)
             img = cv2.putText(img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
-            if pd.box_verts_update:
+            if image_point_dict:
                     image_point=[
                         image_point_dict[corners['tl']][0],
                         image_point_dict[corners['tr']][0],
@@ -206,18 +184,12 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,class_names=No
     }
     return img, data
 
-frame = None
-frame2 = None
-warp = None
-
-def cam_reader():
-    global frame
-    global frame2
-    global warp
-    cap = cv2.VideoCapture(url_video)
-    # cap = cv2.VideoCapture(2)
-    # cap.set(3, 640)
-    # cap.set(4, 480)
+def cam_reader(url_video, url_detections, connection):
+    
+    # cap = cv2.VideoCapture(url_video)
+    cap = cv2.VideoCapture(2)
+    cap.set(3, 640)
+    cap.set(4, 480)
     while True:
         try:
             ret, frame = cap.read()
@@ -228,72 +200,88 @@ def cam_reader():
         except:
             print("CAMERA COULD NOT BE OPEN")
             break
+        connection.send(frame)
 
-        if(frame2 is None):
-            frame2 = frame
-        # cv2.imshow('frame', frame2)
-        cv2.imshow('frame', cv2.resize(frame2, (1380,1020)))
+def robot_perception(connection, use_cuda = True):
+    calib_path = ""
+    corners = {
+        'tl' :'0',
+        'tr' :'1',
+        'br' :'2',
+        'bl' :'3'
+        }
+
+    index_of_marker = -1
+    first_tag = True
+
+    pd = PlaneDetection(calib_path, corners)
+
+    m = Darknet('config.cfg')
+    m.print_network()
+    m.load_weights('yolo.weights')
+
+    if use_cuda:
+        m.cuda()
+
+    class_names = ['DISK','TIRE','WHEEL']
+    frame = None
+    warp = None
+    while True:
+        start_time = time.time()
+        '''
+        *********************** ARUCO  ***********************
+        '''
+        frame = connection.recv()
+        pd.detect_tags_3D(frame)
+        image_point_dict = pd.box_verts_update
+        # print(image_point_dict)
+        
+        
+        homography = pd.compute_homog(w_updated_pts=True)
+        # warp = pd.compute_perspective_trans(frame, w_updated_pts=True)
+
+        start_time2 = time.time()
+        '''
+        *********************** AI PART ***********************
+        '''
+        # frame = resizeAndPad(frame, (416, 416), 0)
+        boxes = do_detect(m, frame, 0.47, 0.6, use_cuda)
+        frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
+        print(data)
+        cv2.imshow('frame', cv2.resize(frame, (1380,1020)))
         if warp is not None:
             cv2.imshow('warp', warp)
 
         key = cv2.waitKey(1)
         if key == 27:
             break
+        # try:
+        #     server_return = requests.post(url_detections, json=data)
+        #     print('[INFO]: Detections posted.')
+        # except:
+        #     break
 
+        print("FPS:" + str(1.0 / (time.time() - start_time)))
 
-t1 = Thread(target=cam_reader, args=())
-t1.start()
-
-time.sleep(1)
-calib_path = ""
-corners = {
-    'tl' :'0',
-    'tr' :'1',
-    'br' :'2',
-    'bl' :'3'
-    }
-
-index_of_marker = -1
-first_tag = True
-
-pd = PlaneDetection(calib_path, corners)
-
-m = Darknet('config.cfg')
-m.print_network()
-m.load_weights('yolo.weights')
-
-if use_cuda:
-    m.cuda()
-
-class_names = ['DISK','TIRE','WHEEL']
-
-while True:
-    start_time = time.time()
-    '''
-    *********************** ARUCO  ***********************
-    '''
-    pd.detect_tags_3D(frame)
-    image_point_dict = pd.box_verts_update
-    # print(image_point_dict)
+if __name__ == '__main__':
+    # marker_size = 2.91  # cm
+    # grid_w = 28.4
+    # grid_h = 12.6
     
+    url_video = 'http://10.41.0.4:8080/?action=stream'
+    url_detections = 'http://10.41.0.4:5000/detections'
+    # url_video = 'http://10.41.0.4:8080/?action=stream'
+    # url_detections = 'http://192.168.100.43:5000/detections'
+
+    percept_in_conn, cam_out_conn = Pipe()
     
-    homography = pd.compute_homog(w_updated_pts=True)
-    # warp = pd.compute_perspective_trans(frame, w_updated_pts=True)
-
-    start_time2 = time.time()
-    '''
-    *********************** AI PART ***********************
-    '''
-    # frame = resizeAndPad(frame, (416, 416), 0)
-    boxes = do_detect(m, frame, 0.47, 0.6, use_cuda)
-    frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker, homography ,class_names=class_names)
-    frame2 = frame
-    print(data)
-    try:
-        server_return = requests.post(url_detections, json=data)
-        print('[INFO]: Detections posted.')
-    except:
-        break
-
-    print("FPS:" + str(1.0 / (time.time() - start_time)))
-
+    stream_reader_process = Process(target=cam_reader, args=(url_video, url_detections, cam_out_conn))
+    rob_percept_process = Process(target=robot_perception, args=(percept_in_conn,))
+    
+    # start the receiver
+    stream_reader_process.start()
+    rob_percept_process.start()
+    # wait for all processes to finish
+    rob_percept_process.join()
+    stream_reader_process.kill()
+    
