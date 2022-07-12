@@ -184,25 +184,25 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
     }
     return img, data
 
-def cam_reader(url_video, url_detections, connection):
+def cam_reader(cam_out_conn, url_video):
     
-    # cap = cv2.VideoCapture(url_video)
-    cap = cv2.VideoCapture(2)
-    cap.set(3, 640)
-    cap.set(4, 480)
+    cap = cv2.VideoCapture(url_video)
+    # cap = cv2.VideoCapture(2)
+    # cap.set(3, 640)
+    # cap.set(4, 480)
     while True:
         try:
             ret, frame = cap.read()
             # frame = resizeAndPad(frame, (416, 416), 0)
             height, width, channels = frame.shape
             
-            # print(frame.shape)
+            print(frame.shape)
         except:
             print("CAMERA COULD NOT BE OPEN")
             break
-        connection.send(frame)
+        cam_out_conn.send(frame)
 
-def robot_perception(connection, use_cuda = True):
+def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
     calib_path = ""
     corners = {
         'tl' :'0',
@@ -231,7 +231,7 @@ def robot_perception(connection, use_cuda = True):
         '''
         *********************** ARUCO  ***********************
         '''
-        frame = connection.recv()
+        frame = percept_in_conn.recv()
         pd.detect_tags_3D(frame)
         image_point_dict = pd.box_verts_update
         # print(image_point_dict)
@@ -239,15 +239,14 @@ def robot_perception(connection, use_cuda = True):
         
         homography = pd.compute_homog(w_updated_pts=True)
         # warp = pd.compute_perspective_trans(frame, w_updated_pts=True)
-
-        start_time2 = time.time()
         '''
         *********************** AI PART ***********************
         '''
         # frame = resizeAndPad(frame, (416, 416), 0)
         boxes = do_detect(m, frame, 0.47, 0.6, use_cuda)
         frame, data = plot_boxes(frame, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
-        print(data)
+        # print(data)
+        percept_out_conn.send(data)
         cv2.imshow('frame', cv2.resize(frame, (1380,1020)))
         if warp is not None:
             cv2.imshow('warp', warp)
@@ -255,33 +254,41 @@ def robot_perception(connection, use_cuda = True):
         key = cv2.waitKey(1)
         if key == 27:
             break
-        # try:
-        #     server_return = requests.post(url_detections, json=data)
-        #     print('[INFO]: Detections posted.')
-        # except:
-        #     break
-
         print("FPS:" + str(1.0 / (time.time() - start_time)))
+
+def send_detections(send_detect_in_conn, url_detections):
+    while True:
+        data = send_detect_in_conn.recv()
+        if data:
+            print(data)
+            try:
+                server_return = requests.post(url_detections, json=data)
+                print('[INFO]: Detections posted.')
+            except:
+                break
 
 if __name__ == '__main__':
     # marker_size = 2.91  # cm
     # grid_w = 28.4
     # grid_h = 12.6
     
-    url_video = 'http://10.41.0.4:8080/?action=stream'
-    url_detections = 'http://10.41.0.4:5000/detections'
+    url_video = 'http://10.41.0.2:8080/?action=stream'
+    url_detections = 'http://10.41.0.2:5000/detections'
     # url_video = 'http://10.41.0.4:8080/?action=stream'
     # url_detections = 'http://192.168.100.43:5000/detections'
 
     percept_in_conn, cam_out_conn = Pipe()
+    send_detect_in_conn, percept_out_conn = Pipe()
     
-    stream_reader_process = Process(target=cam_reader, args=(url_video, url_detections, cam_out_conn))
-    rob_percept_process = Process(target=robot_perception, args=(percept_in_conn,))
-    
+    stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, url_video))
+    rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn))
+    send_detect_process = Process(target=send_detections, args=(send_detect_in_conn,url_detections))
     # start the receiver
     stream_reader_process.start()
     rob_percept_process.start()
+    send_detect_process.start()
     # wait for all processes to finish
     rob_percept_process.join()
     stream_reader_process.kill()
+    send_detect_process.kill()
     
