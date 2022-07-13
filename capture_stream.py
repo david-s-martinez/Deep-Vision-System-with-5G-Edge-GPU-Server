@@ -203,18 +203,25 @@ def cam_reader(cam_out_conn, url_video):
         cam_out_conn.send(frame)
 
 def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
-    calib_path = ""
+    cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_new_tray.json')
+    # cam_calib_paths = ('camera_matrix_pc_cam.txt','distortion_pc_cam.txt','plane_points_old_tray.json')
+    # corners = {
+    #     'tl' :'0',
+    #     'tr' :'1',
+    #     'br' :'2',
+    #     'bl' :'3'
+    #     }
     corners = {
-        'tl' :'0',
-        'tr' :'1',
-        'br' :'2',
-        'bl' :'3'
+        'tl' :'30',
+        'tr' :'101',
+        'br' :'5',
+        'bl' :'6'
         }
 
     index_of_marker = -1
     first_tag = True
-
-    pd = PlaneDetection(calib_path, corners, marker_size=2.92, tag_scaling=0.37)
+    tag_dict = cv2.aruco.DICT_APRILTAG_36h11
+    pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.36, box_z=2.55,tag_dict=tag_dict)
 
     m = Darknet('config.cfg')
     m.print_network()
@@ -274,8 +281,8 @@ if __name__ == '__main__':
     # grid_w = 28.4
     # grid_h = 12.6
     
-    url_video = 'http://10.41.0.2:8080/?action=stream'
-    url_detections = 'http://10.41.0.2:5000/detections'
+    url_video = 'http://10.41.0.5:8080/?action=stream'
+    url_detections = 'http://10.41.0.5:5000/detections'
     # url_video = 'http://10.41.0.4:8080/?action=stream'
     # url_detections = 'http://192.168.100.43:5000/detections'
 
