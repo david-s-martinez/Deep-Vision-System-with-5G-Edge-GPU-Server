@@ -205,28 +205,30 @@ def cam_reader(cam_out_conn, url_video):
 def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
     cam_path = './detection_config/'
     model_path = './yoloV4_config/'
-    cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_new_tray.json')
-    model_paths = ('config.cfg','yolo.weights')
+    # cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_new_tray.json')
+    cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_old_tray.json')
     # cam_calib_paths = ('camera_matrix_pc_cam.txt','distortion_pc_cam.txt','plane_points_old_tray.json')
+    model_paths = ('config.cfg','yolo.weights')
     cam_calib_paths = tuple([cam_path+file for file in cam_calib_paths])
     model_paths = tuple([model_path+file for file in model_paths])
-    # corners = {
-    #     'tl' :'0',
-    #     'tr' :'1',
-    #     'br' :'2',
-    #     'bl' :'3'
-    #     }
     corners = {
-        'tl' :'30',
-        'tr' :'101',
-        'br' :'5',
-        'bl' :'6'
+        'tl' :'0',
+        'tr' :'1',
+        'br' :'2',
+        'bl' :'3'
         }
+    # corners = {
+    #     'tl' :'30',
+    #     'tr' :'101',
+    #     'br' :'5',
+    #     'bl' :'6'
+    #     }
 
     index_of_marker = -1
     first_tag = True
     tag_dict = cv2.aruco.DICT_APRILTAG_36h11
-    pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.36, box_z=2.55,tag_dict=tag_dict)
+    # pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.36, box_z=2.55,tag_dict=tag_dict)
+    pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.92, tag_scaling=0.36, box_z=2.55)
 
     m = Darknet(model_paths[0])
     m.print_network()
