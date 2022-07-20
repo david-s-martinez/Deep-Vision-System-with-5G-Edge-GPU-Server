@@ -190,45 +190,47 @@ def cam_reader(cam_out_conn, url_video):
     # cap = cv2.VideoCapture(2)
     # cap.set(3, 640)
     # cap.set(4, 480)
-    while True:
+    while cap.isOpened():
         try:
             ret, frame = cap.read()
             # frame = resizeAndPad(frame, (416, 416), 0)
             height, width, channels = frame.shape
             
             print(frame.shape)
+            cam_out_conn.send(frame)
         except:
             print("CAMERA COULD NOT BE OPEN")
             break
-        cam_out_conn.send(frame)
 
 def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
     cam_path = './detection_config/'
     model_path = './yoloV4_config/'
-    # cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_new_tray.json')
-    cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_old_tray.json')
+    cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_new_tray.json')
+    # cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_old_tray.json')
     # cam_calib_paths = ('camera_matrix_pc_cam.txt','distortion_pc_cam.txt','plane_points_old_tray.json')
+    # cam_calib_paths = ('camera_matrix_pc_cam.txt','distortion_pc_cam.txt','plane_points_new_tray.json')
     model_paths = ('config.cfg','yolo.weights')
     cam_calib_paths = tuple([cam_path+file for file in cam_calib_paths])
     model_paths = tuple([model_path+file for file in model_paths])
-    corners = {
-        'tl' :'0',
-        'tr' :'1',
-        'br' :'2',
-        'bl' :'3'
-        }
     # corners = {
-    #     'tl' :'30',
-    #     'tr' :'101',
-    #     'br' :'5',
-    #     'bl' :'6'
+    #     'tl' :'0',
+    #     'tr' :'1',
+    #     'br' :'2',
+    #     'bl' :'3'
     #     }
+    corners = {
+        'tl' :'30',
+        'tr' :'101',
+        'br' :'5',
+        'bl' :'6'
+        }
 
     index_of_marker = -1
     first_tag = True
     tag_dict = cv2.aruco.DICT_APRILTAG_36h11
-    # pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.36, box_z=2.55,tag_dict=tag_dict)
-    pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.92, tag_scaling=0.36, box_z=2.55)
+    # pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.3, box_z=2.55,tag_dict=tag_dict)
+    pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.36, box_z=2.55,tag_dict=tag_dict)
+    # pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.92, tag_scaling=0.36, box_z=2.55)
 
     m = Darknet(model_paths[0])
     m.print_network()
@@ -240,7 +242,9 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
     class_names = ['DISK','TIRE','WHEEL']
     frame = None
     warp = None
+    i=0
     while True:
+        
         start_time = time.time()
         '''
         *********************** ARUCO  ***********************
@@ -270,6 +274,11 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
         key = cv2.waitKey(1)
         if key == 27:
             break
+        if key == ord('s'):
+            i+=1
+            cv2.imwrite('images/raw_frame'+str(i) +'.png', raw_frame)
+            cv2.imwrite('images/warp_frame'+str(i) +'.png', warp)
+            
         print("FPS:" + str(1.0 / (time.time() - start_time)))
 
 def post_detections(send_detect_in_conn, url_detections):
@@ -288,8 +297,10 @@ if __name__ == '__main__':
     # grid_w = 28.4
     # grid_h = 12.6
     
-    url_video = 'http://10.41.0.5:8080/?action=stream'
-    url_detections = 'http://10.41.0.5:5000/detections'
+    # url_video = 2
+    # url_video = 'delta_robot.mp4'
+    url_video = 'http://10.41.0.4:8080/?action=stream'
+    url_detections = 'http://10.41.0.4:5000/detections'
     # url_video = 'http://10.41.0.4:8080/?action=stream'
     # url_detections = 'http://192.168.100.43:5000/detections'
 
