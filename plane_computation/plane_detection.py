@@ -49,8 +49,8 @@ class PlaneDetection:
         br = self.plane_world_pts[self.corners['br']]
         bl = self.plane_world_pts[self.corners['bl']]
         
-        self.plane_w = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))//10
-        self.plane_h = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))//10
+        self.plane_w = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))/10
+        self.plane_h = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))/10
 
         print(self.plane_w, self.plane_h)
     

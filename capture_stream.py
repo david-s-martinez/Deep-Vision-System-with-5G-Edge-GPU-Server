@@ -102,7 +102,7 @@ def get_color(c, x, max_val):
     r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
     return int(r * 255)
 
-def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_names=None, color=None):
+def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_names=None, color=None, plane_dims=None):
     img = np.copy(img)
 
     centroids = []
@@ -162,10 +162,22 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
             labels.append(int(cls_id))
             confidences.append(int(cls_conf * 100))
             index_marker.append(index_of_marker)
-        if homog is not None:
+        if homog is not None and plane_dims is None:
                 new_centroid = np.append(centroid,1)
                 world_centroid = homog.dot(new_centroid)
                 world_centroid = world_centroid[0], world_centroid[1]
+                pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
+                pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
+                cv2.putText(img, 
+                            pos_str_x, (centroid[0]-40,centroid[1]), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+                cv2.putText(img, 
+                            pos_str_y, (centroid[0]-40,centroid[1]+20), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+        img = cv2.rectangle(img, (x1, y1), (x2, y2), rgb, bbox_thick)
+        if plane_dims and homog is None:
+                
+                world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
                 pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
                 pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
                 cv2.putText(img, 
@@ -252,19 +264,23 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
         raw_frame = percept_in_conn.recv()
         frame_detect = raw_frame.copy()
         pd.detect_tags_3D(frame_detect)
+        plane_dims = {'h':pd.plane_h, 'w':pd.plane_w}
         image_point_dict = pd.box_verts_update
         # print(image_point_dict)
         
         
         homography = pd.compute_homog(w_updated_pts=True)
         warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True)
+        
+        warp = cv2.resize(warp, (raw_frame.shape[1],raw_frame.shape[0]))
         '''
         *********************** AI PART ***********************
         '''
         # padded = resizeAndPad(raw_frame, (416, 416), 0)
-        boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
-        frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
-        # print(data)
+        # boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
+        # frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
+        boxes = do_detect(m, warp, 0.47, 0.6, use_cuda)
+        warp, data = plot_boxes(warp, boxes[0], image_point_dict, index_of_marker, None, corners,class_names=class_names, plane_dims=plane_dims)
         percept_out_conn.send(data)
         cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
         # cv2.imshow('raw_frame', padded)
@@ -287,7 +303,7 @@ def post_detections(send_detect_in_conn, url_detections):
         
         print(data)
         try:
-            server_return = requests.post(url_detections, json=data)
+            # server_return = requests.post(url_detections, json=data)
             print('[INFO]: Detections posted.')
         except:
             break
@@ -298,8 +314,8 @@ if __name__ == '__main__':
     # grid_h = 12.6
     
     # url_video = 2
-    # url_video = 'delta_robot.mp4'
-    url_video = 'http://10.41.0.4:8080/?action=stream'
+    url_video = 'delta_robot.mp4'
+    # url_video = 'http://10.41.0.4:8080/?action=stream'
     url_detections = 'http://10.41.0.4:5000/detections'
     # url_video = 'http://10.41.0.4:8080/?action=stream'
     # url_detections = 'http://192.168.100.43:5000/detections'
