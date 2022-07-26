@@ -303,7 +303,7 @@ def post_detections(send_detect_in_conn, url_detections):
         
         print(data)
         try:
-            # server_return = requests.post(url_detections, json=data)
+            server_return = requests.post(url_detections, json=data)
             print('[INFO]: Detections posted.')
         except:
             break
@@ -314,8 +314,8 @@ if __name__ == '__main__':
     # grid_h = 12.6
     
     # url_video = 2
-    url_video = 'delta_robot.mp4'
-    # url_video = 'http://10.41.0.4:8080/?action=stream'
+    # url_video = 'delta_robot.mp4'
+    url_video = 'http://10.41.0.4:8080/?action=stream'
     url_detections = 'http://10.41.0.4:5000/detections'
     # url_video = 'http://10.41.0.4:8080/?action=stream'
     # url_detections = 'http://192.168.100.43:5000/detections'
