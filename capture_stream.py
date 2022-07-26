@@ -269,8 +269,8 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
         # print(image_point_dict)
         
         
-        homography = pd.compute_homog(w_updated_pts=True)
-        warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True)
+        homography = pd.compute_homog(w_updated_pts=True, w_up_plane=True)
+        warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True, w_up_plane=True)
         
         warp = cv2.resize(warp, (raw_frame.shape[1],raw_frame.shape[0]))
         '''
