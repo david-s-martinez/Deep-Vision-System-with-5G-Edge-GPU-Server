@@ -58,7 +58,7 @@ def resizeAndPad(img, size, padColor=0):
     # scale and pad
     scaled_img = cv2.resize(img, (new_w, new_h), interpolation=interp)
     scaled_img = cv2.copyMakeBorder(scaled_img, pad_top, pad_bot, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT, value=padColor)
-    print(scaled_img.shape)
+    # print(scaled_img.shape)
     return scaled_img
 
 def point_inside_prlgm(object_x, object_y, points):
@@ -208,45 +208,23 @@ def cam_reader(cam_out_conn, url_video):
             # frame = resizeAndPad(frame, (416, 416), 0)
             height, width, channels = frame.shape
             
-            print(frame.shape)
+            # print(frame.shape)
             cam_out_conn.send(frame)
         except:
             print("CAMERA COULD NOT BE OPEN")
             break
 
-def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
-    cam_path = './detection_config/'
-    model_path = './yoloV4_config/'
-    cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_new_tray.json')
-    # cam_calib_paths = ('camera_matrix_rpi.txt','distortion_rpi.txt','plane_points_old_tray.json')
-    # cam_calib_paths = ('camera_matrix_pc_cam.txt','distortion_pc_cam.txt','plane_points_old_tray.json')
-    # cam_calib_paths = ('camera_matrix_pc_cam.txt','distortion_pc_cam.txt','plane_points_new_tray.json')
-    model_paths = ('config.cfg','yolo.weights')
-    cam_calib_paths = tuple([cam_path+file for file in cam_calib_paths])
-    model_paths = tuple([model_path+file for file in model_paths])
-    # corners = {
-    #     'tl' :'0',
-    #     'tr' :'1',
-    #     'br' :'2',
-    #     'bl' :'3'
-    #     }
-    corners = {
-        'tl' :'30',
-        'tr' :'101',
-        'br' :'5',
-        'bl' :'6'
-        }
+def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True):
+    pd = PlaneDetection(config['vision'], 
+                        config['plane']['corners'], 
+                        marker_size = config['plane']['tag_size'], 
+                        tag_scaling = config['plane']['tag_scaling'], 
+                        box_z = config['plane']['z_tansl'],
+                        tag_dict = config['plane']['tag_dict'])
 
-    index_of_marker = -1
-    first_tag = True
-    tag_dict = cv2.aruco.DICT_APRILTAG_36h11
-    # pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.3, box_z=2.55,tag_dict=tag_dict)
-    pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.86, tag_scaling=0.36, box_z=2.55,tag_dict=tag_dict)
-    # pd = PlaneDetection(cam_calib_paths, corners, marker_size=2.92, tag_scaling=0.36, box_z=2.55)
-
-    m = Darknet(model_paths[0])
+    m = Darknet(config['neural_net']['model_config'])
     m.print_network()
-    m.load_weights(model_paths[1])
+    m.load_weights(config['neural_net']['weights'])
 
     if use_cuda:
         m.cuda()
@@ -272,19 +250,20 @@ def robot_perception(percept_in_conn, percept_out_conn, use_cuda = True):
         homography = pd.compute_homog(w_updated_pts=True, w_up_plane=True)
         warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True, w_up_plane=True)
         
-        warp = cv2.resize(warp, (raw_frame.shape[1],raw_frame.shape[0]))
         '''
         *********************** AI PART ***********************
         '''
         # padded = resizeAndPad(raw_frame, (416, 416), 0)
         # boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
-        # frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, index_of_marker, homography, corners,class_names=class_names)
-        boxes = do_detect(m, warp, 0.47, 0.6, use_cuda)
-        warp, data = plot_boxes(warp, boxes[0], image_point_dict, index_of_marker, None, corners,class_names=class_names, plane_dims=plane_dims)
-        percept_out_conn.send(data)
+        # frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, -1, homography, corners,class_names=class_names)
+        
         cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
         # cv2.imshow('raw_frame', padded)
         if warp is not None:
+            warp = cv2.resize(warp, (raw_frame.shape[1],raw_frame.shape[0]))
+            boxes = do_detect(m, warp, 0.47, 0.6, use_cuda)
+            warp, data = plot_boxes(warp, boxes[0], image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
+            percept_out_conn.send(data)
             cv2.imshow('warp', warp)
 
         key = cv2.waitKey(1)
@@ -309,22 +288,59 @@ def post_detections(send_detect_in_conn, url_detections):
             break
 
 if __name__ == '__main__':
-    # marker_size = 2.91  # cm
-    # grid_w = 28.4
-    # grid_h = 12.6
-    
     # url_video = 2
     # url_video = 'delta_robot.mp4'
     url_video = 'http://10.41.0.4:8080/?action=stream'
     url_detections = 'http://10.41.0.4:5000/detections'
     # url_video = 'http://10.41.0.4:8080/?action=stream'
     # url_detections = 'http://192.168.100.43:5000/detections'
+    
+    CAM_CONFIG_PATH = './detection_config/'
+    MODEL_PATH = './yoloV4_config/'
+    TAG_TYPE = 'april'
+    CAM_TYPE = 'rpi'
+    
+    path_dict = {
+    'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',
+                    'pc':CAM_CONFIG_PATH+'camera_matrix_pc_cam.txt' },
+
+    'distortion':{'rpi':CAM_CONFIG_PATH+'distortion_rpi.txt',
+                    'pc':CAM_CONFIG_PATH+'distortion_pc_cam.txt' },
+
+    'plane_pts':{'april':CAM_CONFIG_PATH+'plane_points_new_tray.json',
+                    'aruco':CAM_CONFIG_PATH+'plane_points_old_tray.json'},
+
+    'model' : {'model_config':MODEL_PATH+'config.cfg',
+                    'weights':MODEL_PATH+'yolo.weights'},
+        }
+
+    plane_config = {
+    'tag_dicts' : {'aruco':cv2.aruco.DICT_4X4_50,
+                'april':cv2.aruco.DICT_APRILTAG_36h11},
+    
+    'plane_corners' : {'aruco': {'tl' :'0','tr' :'1','br' :'2','bl' :'3'}, 
+                        'april':{'tl' :'30','tr' :'101','br' :'5','bl' :'6'}},
+        }
+
+    config = {
+    'neural_net': path_dict['model'],
+
+    'vision': (path_dict['cam_matrix'][CAM_TYPE],
+                path_dict['distortion'][CAM_TYPE],
+                path_dict['plane_pts'][TAG_TYPE]),
+
+    'plane': {'tag_size' : 2.86,
+            'tag_scaling' : 0.36,
+            'z_tansl' : 2.55,
+            'tag_dict': plane_config['tag_dicts'][TAG_TYPE],
+            'corners': plane_config['plane_corners'][TAG_TYPE]}
+        }
 
     percept_in_conn, cam_out_conn = Pipe()
     send_detect_in_conn, percept_out_conn = Pipe()
-    
+
     stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, url_video))
-    rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn))
+    rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn, config))
     post_detect_process = Process(target=post_detections, args=(send_detect_in_conn,url_detections))
     # start the receiver
     stream_reader_process.start()
