@@ -21,19 +21,16 @@ from multiprocessing import Process
 from multiprocessing import Pipe
 
 def resizeAndPad(img, size, padColor=0):
-
     h, w = img.shape[:2]
     sh, sw = size
-
     # interpolation method
     if h > sh or w > sw: # shrinking image
         interp = cv2.INTER_AREA
     else: # stretching image
         interp = cv2.INTER_CUBIC
-
     # aspect ratio of image
     aspect = w/h
-    #print("aspect",aspect)
+ 
     # compute scaling and pad sizing
     if aspect > 1: # horizontal image
         new_w = sw
@@ -58,7 +55,6 @@ def resizeAndPad(img, size, padColor=0):
     # scale and pad
     scaled_img = cv2.resize(img, (new_w, new_h), interpolation=interp)
     scaled_img = cv2.copyMakeBorder(scaled_img, pad_top, pad_bot, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT, value=padColor)
-    # print(scaled_img.shape)
     return scaled_img
 
 def point_inside_prlgm(object_x, object_y, points):
@@ -127,7 +123,6 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
         if len(box) >= 7 and class_names:
             cls_conf = box[5]
             cls_id = box[6]
-            # print('%s: %f' % (class_names[cls_id], cls_conf))
             classes = len(class_names)
             offset = cls_id * 123457 % classes
             red = get_color(2, offset, classes)
@@ -155,8 +150,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
                         image_point_dict[corners['bl']][1]
                     ]
                     index_of_marker = point_inside_prlgm(centroid[0],centroid[1], image_point)
-
-            # y=y-80
+            
             centroids.append([x1, y1])
             rectangles.append([x2, y2])
             labels.append(int(cls_id))
@@ -196,19 +190,12 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
     }
     return img, data
 
-def cam_reader(cam_out_conn, url_video):
-    
-    cap = cv2.VideoCapture(url_video)
-    # cap = cv2.VideoCapture(2)
-    # cap.set(3, 640)
-    # cap.set(4, 480)
+def cam_reader(cam_out_conn, cam_source):
+    cap = cv2.VideoCapture(cam_source)
     while cap.isOpened():
         try:
             ret, frame = cap.read()
-            # frame = resizeAndPad(frame, (416, 416), 0)
             height, width, channels = frame.shape
-            
-            # print(frame.shape)
             cam_out_conn.send(frame)
         except:
             print("CAMERA COULD NOT BE OPEN")
@@ -288,13 +275,10 @@ def post_detections(send_detect_in_conn, url_detections):
             break
 
 if __name__ == '__main__':
-    # url_video = 2
-    # url_video = 'delta_robot.mp4'
-    url_video = 'http://10.41.0.4:8080/?action=stream'
+    # cam_source = 2
+    # cam_source = 'delta_robot.mp4'
+    cam_source = 'http://10.41.0.4:8080/?action=stream'
     url_detections = 'http://10.41.0.4:5000/detections'
-    # url_video = 'http://10.41.0.4:8080/?action=stream'
-    # url_detections = 'http://192.168.100.43:5000/detections'
-    
     CAM_CONFIG_PATH = './detection_config/'
     MODEL_PATH = './yoloV4_config/'
     TAG_TYPE = 'april'
@@ -339,7 +323,7 @@ if __name__ == '__main__':
     percept_in_conn, cam_out_conn = Pipe()
     send_detect_in_conn, percept_out_conn = Pipe()
 
-    stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, url_video))
+    stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, cam_source))
     rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn, config))
     post_detect_process = Process(target=post_detections, args=(send_detect_in_conn,url_detections))
     # start the receiver
