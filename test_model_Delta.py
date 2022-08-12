@@ -121,11 +121,8 @@ def get_bboxes(predicted_bboxes, image_index):
     return predicted_bbox_after_non_max_suppression
 
 
-def make_prediction(frame):
-    # model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/model_configs/RESNET_18_saved.pt",map_location=torch.device(0))
-    model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/model_configs/MOBILENET_V2_saved.pt",map_location=torch.device(0))
-    model.eval()
-    model.cuda()
+def make_prediction(frame,model):
+    
     predictions = model(frame)
 
     predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=0.75)
@@ -142,15 +139,8 @@ def make_prediction(frame):
         bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class])
     return bboxes_to_return
 
-
-def detection(frame, show_centroids=True):
+def detection(frame, model, show_centroids=True):
     frame = reshape(frame, w=270, h=180)
     frame_normalized = image_normalization(image=frame).unsqueeze(0).float().to(0)
-    bboxes = make_prediction(frame_normalized)
-    print(bboxes)
+    bboxes = make_prediction(frame_normalized, model)
     return bboxes
-
-
-# if __name__ == "__main__":
-#     frame = cv2.imread("/Users/artemmoroz/Desktop/CIIRC_projects/DeltaWheelsDetection2/warp_images_test_segmentation/warp_frame3835.png")
-#     detection(frame=frame)

@@ -140,19 +140,6 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
         
             cv2.rectangle(img, (x1,y1), c3, rgb, -1)
             img = cv2.putText(img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
-            # if image_point_dict:
-            #         image_point=[
-            #             image_point_dict[corners['tl']][0],
-            #             image_point_dict[corners['tr']][0],
-            #             image_point_dict[corners['br']][0],
-            #             image_point_dict[corners['bl']][0],
-            #             image_point_dict[corners['tl']][1],
-            #             image_point_dict[corners['tr']][1],
-            #             image_point_dict[corners['br']][1],
-            #             image_point_dict[corners['bl']][1]
-            #         ]
-            #         index_of_marker = point_inside_prlgm(centroid[0],centroid[1], image_point)
-            
             centroids.append([x1, y1])
             rectangles.append([x2, y2])
             labels.append(int(cls_id))
@@ -211,13 +198,11 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
                         box_z = config['plane']['z_tansl'],
                         tag_dict = config['plane']['tag_dict'])
 
-    m = Darknet(config['neural_net']['model_config'])
-    m.print_network()
-    m.load_weights(config['neural_net']['weights'])
-
-    if use_cuda:
-        m.cuda()
-
+    # model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/model_configs/RESNET_18_saved.pt",map_location=torch.device(0))
+    model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/model_configs/MOBILENET_V2_saved.pt",map_location=torch.device(0))
+    model.eval()
+    model.cuda()
+    
     class_names = ['TIRE','DISK','WHEEL']
     frame = None
     warp = None
@@ -245,9 +230,11 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
         # cv2.imshow('raw_frame', padded)
         if warp is not None:
-            boxes = detection(frame=warp)
+            boxes = detection(warp, model)
             warp, data = plot_boxes(warp, boxes, image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
             percept_out_conn.send(data)
+            
+            warp=cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
             cv2.imshow('warp', warp)
 
         key = cv2.waitKey(1)
@@ -264,7 +251,7 @@ def post_detections(send_detect_in_conn, url_detections):
     while True:
         data = send_detect_in_conn.recv()
         
-        print(data)
+        # print(data)
         try:
             server_return = requests.post(url_detections, json=data)
             print('[INFO]: Detections posted.')

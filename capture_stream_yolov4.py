@@ -140,14 +140,14 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
             img = cv2.putText(img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
             if image_point_dict:
                     image_point=[
-                        image_point_dict[corners['tl']][0],
-                        image_point_dict[corners['tr']][0],
-                        image_point_dict[corners['br']][0],
-                        image_point_dict[corners['bl']][0],
-                        image_point_dict[corners['tl']][1],
-                        image_point_dict[corners['tr']][1],
-                        image_point_dict[corners['br']][1],
-                        image_point_dict[corners['bl']][1]
+                        image_point_dict[corners['tl']]['base'],
+                        image_point_dict[corners['tr']]['base'],
+                        image_point_dict[corners['br']]['base'],
+                        image_point_dict[corners['bl']]['base'],
+                        image_point_dict[corners['tl']]['top'],
+                        image_point_dict[corners['tr']]['top'],
+                        image_point_dict[corners['br']]['top'],
+                        image_point_dict[corners['bl']]['top']
                     ]
                     index_of_marker = point_inside_prlgm(centroid[0],centroid[1], image_point)
             
@@ -233,7 +233,6 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         image_point_dict = pd.box_verts_update
         # print(image_point_dict)
         
-        
         homography = pd.compute_homog(w_updated_pts=True, w_up_plane=True)
         warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True, w_up_plane=True)
         
@@ -241,16 +240,13 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         *********************** AI PART ***********************
         '''
         # padded = resizeAndPad(raw_frame, (416, 416), 0)
-        # boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
-        # frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, -1, homography, corners,class_names=class_names)
+        boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
+        frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, -1, homography, config['plane']['corners'],class_names=class_names)
+        percept_out_conn.send(data)
         
         cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
-        # cv2.imshow('raw_frame', padded)
         if warp is not None:
-            warp = cv2.resize(warp, (raw_frame.shape[1],raw_frame.shape[0]))
-            boxes = do_detect(m, warp, 0.47, 0.6, use_cuda)
-            warp, data = plot_boxes(warp, boxes[0], image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
-            percept_out_conn.send(data)
+            warp=cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
             cv2.imshow('warp', warp)
 
         key = cv2.waitKey(1)
@@ -279,9 +275,9 @@ if __name__ == '__main__':
     # cam_source = 'delta_robot.mp4'
     cam_source = 'http://10.41.0.4:8080/?action=stream'
     url_detections = 'http://10.41.0.4:5000/detections'
-    CAM_CONFIG_PATH = './vison_configs/'
+    CAM_CONFIG_PATH = './vision_configs/'
     MODEL_PATH = './model_configs/'
-    TAG_TYPE = 'april'
+    TAG_TYPE = 'aruco'
     CAM_TYPE = 'rpi'
     
     path_dict = {
