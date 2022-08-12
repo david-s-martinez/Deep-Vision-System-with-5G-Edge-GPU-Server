@@ -16,6 +16,8 @@ import argparse
 import cv2
 import math
 import numpy as np
+from test_model_Delta import *
+import Detection_models
 from plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
 from multiprocessing import Pipe
@@ -120,9 +122,9 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
             rgb = color
         else:
             rgb = (255, 0, 0)
-        if len(box) >= 7 and class_names:
-            cls_conf = box[5]
-            cls_id = box[6]
+        if len(box) >= 6 and class_names:
+            cls_conf = box[4]
+            cls_id = box[5]
             classes = len(class_names)
             offset = cls_id * 123457 % classes
             red = get_color(2, offset, classes)
@@ -130,7 +132,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
             blue = get_color(0, offset, classes)
             if color is None:
                 rgb = (red, green, blue)
-            msg = str(class_names[cls_id])+" "+str(round(cls_conf,3))
+            msg = str(class_names[int(cls_id)])+" "+str(round(cls_conf,3))
             t_size = cv2.getTextSize(msg, 0, 0.7, thickness=bbox_thick // 2)[0]
             c1, c2 = (x1,y1), (x2, y2)
             centroid = ((x1+x2)//2,(y1+y2)//2)
@@ -138,18 +140,18 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
         
             cv2.rectangle(img, (x1,y1), c3, rgb, -1)
             img = cv2.putText(img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
-            if image_point_dict:
-                    image_point=[
-                        image_point_dict[corners['tl']][0],
-                        image_point_dict[corners['tr']][0],
-                        image_point_dict[corners['br']][0],
-                        image_point_dict[corners['bl']][0],
-                        image_point_dict[corners['tl']][1],
-                        image_point_dict[corners['tr']][1],
-                        image_point_dict[corners['br']][1],
-                        image_point_dict[corners['bl']][1]
-                    ]
-                    index_of_marker = point_inside_prlgm(centroid[0],centroid[1], image_point)
+            # if image_point_dict:
+            #         image_point=[
+            #             image_point_dict[corners['tl']][0],
+            #             image_point_dict[corners['tr']][0],
+            #             image_point_dict[corners['br']][0],
+            #             image_point_dict[corners['bl']][0],
+            #             image_point_dict[corners['tl']][1],
+            #             image_point_dict[corners['tr']][1],
+            #             image_point_dict[corners['br']][1],
+            #             image_point_dict[corners['bl']][1]
+            #         ]
+            #         index_of_marker = point_inside_prlgm(centroid[0],centroid[1], image_point)
             
             centroids.append([x1, y1])
             rectangles.append([x2, y2])
@@ -216,7 +218,7 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
     if use_cuda:
         m.cuda()
 
-    class_names = ['DISK','TIRE','WHEEL']
+    class_names = ['TIRE','DISK','WHEEL']
     frame = None
     warp = None
     i=0
@@ -240,16 +242,11 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         '''
         *********************** AI PART ***********************
         '''
-        # padded = resizeAndPad(raw_frame, (416, 416), 0)
-        # boxes = do_detect(m, raw_frame, 0.47, 0.6, use_cuda)
-        # frame_detect, data = plot_boxes(frame_detect, boxes[0], image_point_dict, -1, homography, corners,class_names=class_names)
-        
         cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
         # cv2.imshow('raw_frame', padded)
         if warp is not None:
-            warp = cv2.resize(warp, (raw_frame.shape[1],raw_frame.shape[0]))
-            boxes = do_detect(m, warp, 0.47, 0.6, use_cuda)
-            warp, data = plot_boxes(warp, boxes[0], image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
+            boxes = detection(frame=warp)
+            warp, data = plot_boxes(warp, boxes, image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
             percept_out_conn.send(data)
             cv2.imshow('warp', warp)
 
@@ -279,8 +276,8 @@ if __name__ == '__main__':
     # cam_source = 'delta_robot.mp4'
     cam_source = 'http://10.41.0.4:8080/?action=stream'
     url_detections = 'http://10.41.0.4:5000/detections'
-    CAM_CONFIG_PATH = './detection_config/'
-    MODEL_PATH = './yoloV4_config/'
+    CAM_CONFIG_PATH = './vision_configs/'
+    MODEL_PATH = './model_configs/'
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
     
