@@ -2,7 +2,7 @@ import torch
 import cv2
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-import Detection_models
+# from conv_net_detect.Detection_models import DetectionModel
 ANCHOR_BOXES = [3.8] * 2
 GRID_SIZE_WIDTH = 18
 GRID_SIZE_HEIGHT = 12

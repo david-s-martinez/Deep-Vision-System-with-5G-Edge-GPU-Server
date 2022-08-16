@@ -12,12 +12,15 @@ from tool.utils import *
 from tool.torch_utils import *
 from tool.darknet2pytorch import Darknet
 import torch
+import torch.nn
+import torchvision
 import argparse
 import cv2
 import math
 import numpy as np
-from test_model_Delta import *
+from conv_net_detect.test_model_Delta import *
 import Detection_models
+# from conv_net_detect.Detection_models import DetectionModel
 from plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
 from multiprocessing import Pipe
@@ -100,7 +103,7 @@ def get_color(c, x, max_val):
     r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
     return int(r * 255)
 
-def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_names=None, color=None, plane_dims=None):
+def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corners,class_names=None, color=None, plane_dims=None):
     img = np.copy(img)
 
     centroids = []
@@ -132,44 +135,41 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
             blue = get_color(0, offset, classes)
             if color is None:
                 rgb = (red, green, blue)
+            
             msg = str(class_names[int(cls_id)])+" "+str(round(cls_conf,3))
             t_size = cv2.getTextSize(msg, 0, 0.7, thickness=bbox_thick // 2)[0]
+
+            inv_trans = np.linalg.pinv(homog)
+            p1 = cv2.perspectiveTransform(np.float32([[[x1, y1]]]), inv_trans)
+            p2 = cv2.perspectiveTransform(np.float32([[[x2, y2]]]), inv_trans)
+            x1,y1 = int(p1[0][0][0]),int(p1[0][0][1])
+            x2,y2 = int(p2[0][0][0]),int(p2[0][0][1])
             c1, c2 = (x1,y1), (x2, y2)
             centroid = ((x1+x2)//2,(y1+y2)//2)
             c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
         
-            cv2.rectangle(img, (x1,y1), c3, rgb, -1)
-            img = cv2.putText(img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
+            cv2.rectangle(out_img, (x1,y1), c3, rgb, -1)
+            out_img = cv2.putText(out_img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
+            world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
+            pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
+            pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
+            cv2.putText(out_img, 
+                        pos_str_x, (centroid[0]-40,centroid[1]), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            cv2.putText(out_img, 
+                        pos_str_y, (centroid[0]-40,centroid[1]+20), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            if cls_id ==0:
+                cls_id = 1
+            elif cls_id ==1:
+                cls_id = 0
             centroids.append([x1, y1])
             rectangles.append([x2, y2])
             labels.append(int(cls_id))
             confidences.append(int(cls_conf * 100))
             index_marker.append(index_of_marker)
-        if homog is not None and plane_dims is None:
-                new_centroid = np.append(centroid,1)
-                world_centroid = homog.dot(new_centroid)
-                world_centroid = world_centroid[0], world_centroid[1]
-                pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
-                pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
-                cv2.putText(img, 
-                            pos_str_x, (centroid[0]-40,centroid[1]), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
-                cv2.putText(img, 
-                            pos_str_y, (centroid[0]-40,centroid[1]+20), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
-        img = cv2.rectangle(img, (x1, y1), (x2, y2), rgb, bbox_thick)
-        if plane_dims and homog is None:
                 
-                world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
-                pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
-                pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
-                cv2.putText(img, 
-                            pos_str_x, (centroid[0]-40,centroid[1]), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
-                cv2.putText(img, 
-                            pos_str_y, (centroid[0]-40,centroid[1]+20), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
-        img = cv2.rectangle(img, (x1, y1), (x2, y2), rgb, bbox_thick)
+        out_img = cv2.rectangle(out_img, (x1, y1), (x2, y2), rgb, bbox_thick)
     data = {
         'centroids': centroids,
         'rectangles': rectangles,
@@ -177,7 +177,7 @@ def plot_boxes(img, boxes,image_point_dict, index_of_marker,homog,corners,class_
         'confidences': confidences,
         'markers': index_marker
     }
-    return img, data
+    return out_img, data
 
 def cam_reader(cam_out_conn, cam_source):
     cap = cv2.VideoCapture(cam_source)
@@ -198,8 +198,8 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
                         box_z = config['plane']['z_tansl'],
                         tag_dict = config['plane']['tag_dict'])
 
-    # model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/model_configs/RESNET_18_saved.pt",map_location=torch.device(0))
-    model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/model_configs/MOBILENET_V2_saved.pt",map_location=torch.device(0))
+    # model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/RESNET_18_saved.pt",map_location=torch.device(0))
+    model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/MOBILENET_V2_saved.pt",map_location=torch.device(0))
     model.eval()
     model.cuda()
     
@@ -227,15 +227,18 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         '''
         *********************** AI PART ***********************
         '''
-        cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
+        # boxes = detection(raw_frame, model)
+        # frame_detect, data = plot_boxes(frame_detect, boxes, image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
+        # percept_out_conn.send(data)
         # cv2.imshow('raw_frame', padded)
         if warp is not None:
+
             boxes = detection(warp, model)
-            warp, data = plot_boxes(warp, boxes, image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
+            frame_detect, data = plot_boxes(warp, frame_detect, boxes, image_point_dict, -1, homography, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
             percept_out_conn.send(data)
-            
-            warp=cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
+            warp = cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
             cv2.imshow('warp', warp)
+        cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
 
         key = cv2.waitKey(1)
         if key == 27:
@@ -261,8 +264,8 @@ def post_detections(send_detect_in_conn, url_detections):
 if __name__ == '__main__':
     # cam_source = 2
     # cam_source = 'delta_robot.mp4'
-    cam_source = 'http://10.41.0.4:8080/?action=stream'
-    url_detections = 'http://10.41.0.4:5000/detections'
+    cam_source = 'http://10.41.0.2:8080/?action=stream'
+    url_detections = 'http://10.41.0.2:5000/detections'
     CAM_CONFIG_PATH = './vision_configs/'
     MODEL_PATH = './model_configs/'
     TAG_TYPE = 'april'
