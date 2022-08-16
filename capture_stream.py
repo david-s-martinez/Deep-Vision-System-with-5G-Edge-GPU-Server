@@ -142,15 +142,18 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             c1, c2 = (x1,y1), (x2, y2)
             centroid = ((x1+x2)//2,(y1+y2)//2)
             world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
-
+            w = int(abs(x2-x1) * 1.8)
+            h = int(abs(y2-y1) * 1.8)
 
             inv_trans = np.linalg.pinv(homog)
-            p1 = cv2.perspectiveTransform(np.float32([[[x1, y1]]]), inv_trans)
-            p2 = cv2.perspectiveTransform(np.float32([[[x2, y2]]]), inv_trans)
-            x1,y1 = int(p1[0][0][0]),int(p1[0][0][1])
-            x2,y2 = int(p2[0][0][0]),int(p2[0][0][1])
+
+            c = cv2.perspectiveTransform(np.float32([[[centroid[0], centroid[1]]]]), inv_trans)
+            centroid = (int(c[0][0][0]),int(c[0][0][1]))
+            x1 = centroid[0]-w//2
+            y1 = centroid[1]-h//2
+            x2 = w//2+centroid[0]
+            y2 = h//2+centroid[1]
             c1, c2 = (x1,y1), (x2, y2)
-            centroid = ((x1+x2)//2,(y1+y2)//2)
             c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
         
             cv2.rectangle(out_img, (x1,y1), c3, rgb, -1)
@@ -241,8 +244,8 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
             frame_detect, data = plot_boxes(warp, frame_detect, boxes, image_point_dict, -1, homography, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
             percept_out_conn.send(data)
             warp = cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
-            cv2.imshow('warp', warp)
-        cv2.imshow('frame', cv2.resize(frame_detect, (1380,1020)))
+            cv2.imshow('warp', cv2.resize(warp, (960,900)))
+        cv2.imshow('frame', cv2.resize(frame_detect, (960,900)))
 
         key = cv2.waitKey(1)
         if key == 27:
