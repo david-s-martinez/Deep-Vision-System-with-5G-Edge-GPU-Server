@@ -138,6 +138,11 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             
             msg = str(class_names[int(cls_id)])+" "+str(round(cls_conf,3))
             t_size = cv2.getTextSize(msg, 0, 0.7, thickness=bbox_thick // 2)[0]
+            
+            c1, c2 = (x1,y1), (x2, y2)
+            centroid = ((x1+x2)//2,(y1+y2)//2)
+            world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
+
 
             inv_trans = np.linalg.pinv(homog)
             p1 = cv2.perspectiveTransform(np.float32([[[x1, y1]]]), inv_trans)
@@ -150,7 +155,6 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
         
             cv2.rectangle(out_img, (x1,y1), c3, rgb, -1)
             out_img = cv2.putText(out_img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
-            world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
             pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
             pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
             cv2.putText(out_img, 
@@ -264,8 +268,8 @@ def post_detections(send_detect_in_conn, url_detections):
 if __name__ == '__main__':
     # cam_source = 2
     # cam_source = 'delta_robot.mp4'
-    cam_source = 'http://10.41.0.2:8080/?action=stream'
-    url_detections = 'http://10.41.0.2:5000/detections'
+    cam_source = 'http://10.41.0.5:8080/?action=stream'
+    url_detections = 'http://10.41.0.5:5000/detections'
     CAM_CONFIG_PATH = './vision_configs/'
     MODEL_PATH = './model_configs/'
     TAG_TYPE = 'april'
