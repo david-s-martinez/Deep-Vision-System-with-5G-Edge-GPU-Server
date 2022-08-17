@@ -20,79 +20,9 @@ import math
 import numpy as np
 from conv_net_detect.test_model_Delta import *
 import Detection_models
-# from conv_net_detect.Detection_models import DetectionModel
 from plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
 from multiprocessing import Pipe
-
-def resizeAndPad(img, size, padColor=0):
-    h, w = img.shape[:2]
-    sh, sw = size
-    # interpolation method
-    if h > sh or w > sw: # shrinking image
-        interp = cv2.INTER_AREA
-    else: # stretching image
-        interp = cv2.INTER_CUBIC
-    # aspect ratio of image
-    aspect = w/h
- 
-    # compute scaling and pad sizing
-    if aspect > 1: # horizontal image
-        new_w = sw
-        new_h = np.round(new_w/aspect).astype(int)
-        pad_vert = (sh-new_h)/2
-        pad_top, pad_bot = np.floor(pad_vert).astype(int), np.ceil(pad_vert).astype(int)
-        pad_left, pad_right = 0, 0
-    elif aspect < 1: # vertical image
-        new_h = sh
-        new_w = np.round(new_h*aspect).astype(int)
-        pad_horz = (sw-new_w)/2
-        pad_left, pad_right = np.floor(pad_horz).astype(int), np.ceil(pad_horz).astype(int)
-        pad_top, pad_bot = 0, 0
-    else: # square image
-        new_h, new_w = sh, sw
-        pad_left, pad_right, pad_top, pad_bot = 0, 0, 0, 0
-
-    # set pad color
-    if len(img.shape) == 3 and not isinstance(padColor, (list, tuple, np.ndarray)): # color image but only one color provided
-        padColor = [padColor]*3
-
-    # scale and pad
-    scaled_img = cv2.resize(img, (new_w, new_h), interpolation=interp)
-    scaled_img = cv2.copyMakeBorder(scaled_img, pad_top, pad_bot, pad_left, pad_right, borderType=cv2.BORDER_CONSTANT, value=padColor)
-    return scaled_img
-
-def point_inside_prlgm(object_x, object_y, points):
-    X = 0
-    Y = 1
-    center_up = [int(points[4][X] + points[5][X]) // 2, int(points[4][Y] + points[5][Y]) // 2]
-    center_right = [int(points[5][X] + points[6][X]) // 2, int(points[5][Y] + points[6][Y]) // 2]
-    center_bott = [int(points[6][X] + points[7][X]) // 2, int(points[6][Y] + points[7][Y]) // 2]
-    center_left = [int(points[7][X] + points[4][X]) // 2, int(points[7][Y] + points[4][Y]) // 2]
-    center = [int(center_up[X] + center_bott[X]) // 2, int(center_up[Y] + center_bott[Y]) // 2]
-
-    box0 = [center, center_left, points[4]]
-    box1 = [center_right, center, center_up]
-    box2 = [points[6], center_bott, center]
-    box3 = [center_bott, points[7], center_left]
-    i = 0
-    for poly in [box0, box1, box2, box3]:
-        xb = poly[0][0] - poly[1][0]
-        yb = poly[0][1] - poly[1][1]
-        xc = poly[2][0] - poly[1][0]
-        yc = poly[2][1] - poly[1][1]
-        xp = object_x - poly[1][0]
-        yp = object_y - poly[1][1]
-        d = xb * yc - yb * xc
-        if d != 0:
-            oned = 1.0 / d
-            bb = (xp * yc - xc * yp) * oned
-            cc = (xb * yp - xp * yb) * oned
-            inside = (bb >= 0) & (cc >= 0) & (bb <= 1) & (cc <= 1)
-            if inside:
-                return i
-        i += 1
-    return None
 
 def get_color(c, x, max_val):
     colors = np.array([[1, 0, 1], [0, 0, 1], [0, 1, 1], [0, 1, 0], [1, 1, 0], [1, 0, 0]], dtype=np.float32)
@@ -103,7 +33,8 @@ def get_color(c, x, max_val):
     r = (1 - ratio) * colors[i][c] + ratio * colors[j][c]
     return int(r * 255)
 
-def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corners,class_names=None, color=None, plane_dims=None):
+def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corners,
+    class_names=None, color=None, plane_dims=None):
     img = np.copy(img)
 
     centroids = []
@@ -157,7 +88,10 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             c3 = (c1[0] + t_size[0], c1[1] - t_size[1] - 3)
         
             cv2.rectangle(out_img, (x1,y1), c3, rgb, -1)
-            out_img = cv2.putText(out_img, msg, (c1[0], (c3[1])+15), cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), bbox_thick//2,lineType=cv2.LINE_AA)
+            out_img = cv2.putText(out_img, 
+                                    msg, (c1[0], (c3[1])+15), 
+                                    cv2.FONT_HERSHEY_SIMPLEX,0.7, (0,0,0), 
+                                    bbox_thick//2,lineType=cv2.LINE_AA)
             pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
             pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
             cv2.putText(out_img, 
@@ -236,7 +170,15 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         '''
         if warp is not None:
             boxes = detection(warp, model)
-            frame_detect, data = plot_boxes(warp, frame_detect, boxes, image_point_dict, -1, homography, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
+            frame_detect, data = plot_boxes(warp, 
+                                            frame_detect, 
+                                            boxes, 
+                                            image_point_dict, 
+                                            -1, 
+                                            homography, 
+                                            config['plane']['corners'],
+                                            class_names=class_names, 
+                                            plane_dims=plane_dims)
             percept_out_conn.send(data)
             warp = cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
             cv2.imshow('warp', warp)
@@ -313,9 +255,12 @@ if __name__ == '__main__':
     percept_in_conn, cam_out_conn = Pipe()
     send_detect_in_conn, percept_out_conn = Pipe()
 
-    stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, cam_source))
-    rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn, config))
-    post_detect_process = Process(target=post_detections, args=(send_detect_in_conn,url_detections,IS_ONLINE))
+    stream_reader_process = Process(target=cam_reader, 
+                                    args=(cam_out_conn, cam_source))
+    rob_percept_process = Process(target=robot_perception, 
+                                    args=(percept_in_conn, percept_out_conn, config))
+    post_detect_process = Process(target=post_detections, 
+                                    args=(send_detect_in_conn,url_detections,IS_ONLINE))
     # start the receiver
     stream_reader_process.start()
     rob_percept_process.start()
