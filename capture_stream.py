@@ -139,8 +139,7 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
                         box_z = config['plane']['z_tansl'],
                         tag_dict = config['plane']['tag_dict'])
 
-    # model = torch.load("model_configs/RESNET_18_saved.pt",map_location=torch.device(0))
-    model = torch.load("model_configs/MOBILENET_V2_saved.pt",map_location=torch.device(0))
+    model = torch.load(config['neural_net']['model_config'],map_location=torch.device(0))
     model.eval()
     model.cuda()
     
@@ -182,7 +181,7 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
             percept_out_conn.send(data)
             warp = cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
             cv2.imshow('warp', warp)
-        cv2.imshow('frame', frame_detect)
+        cv2.imshow('frame', cv2.resize(frame_detect,(frame_detect.shape[1]*2,frame_detect.shape[0]*2)))
 
         key = cv2.waitKey(1)
         
@@ -211,9 +210,11 @@ if __name__ == '__main__':
     IS_ONLINE = False
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
+    MODEL_TYPE = 'mobnet'
     MODEL_PATH = './model_configs/'
     CAM_CONFIG_PATH = './vision_configs/'
     url_detections = 'http://10.41.0.5:5000/detections'
+    MODEL = 'MOBILENET_V2_saved.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_saved.pt'
     cam_source = 'http://10.41.0.5:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
     
     path_dict = {
@@ -226,8 +227,8 @@ if __name__ == '__main__':
     'plane_pts':{'april':CAM_CONFIG_PATH+'plane_points_new_tray.json',
                     'aruco':CAM_CONFIG_PATH+'plane_points_old_tray.json'},
 
-    'model' : {'model_config':MODEL_PATH+'config.cfg',
-                    'weights':MODEL_PATH+'yolo.weights'},
+    'model' : {'model_config':MODEL_PATH+MODEL,
+                    'weights':None},
         }
 
     plane_config = {
