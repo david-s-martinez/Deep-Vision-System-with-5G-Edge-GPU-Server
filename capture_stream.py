@@ -234,22 +234,19 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         '''
         *********************** AI PART ***********************
         '''
-        # boxes = detection(raw_frame, model)
-        # frame_detect, data = plot_boxes(frame_detect, boxes, image_point_dict, -1, None, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
-        # percept_out_conn.send(data)
-        # cv2.imshow('raw_frame', padded)
         if warp is not None:
-
             boxes = detection(warp, model)
             frame_detect, data = plot_boxes(warp, frame_detect, boxes, image_point_dict, -1, homography, config['plane']['corners'],class_names=class_names, plane_dims=plane_dims)
             percept_out_conn.send(data)
             warp = cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
-            cv2.imshow('warp', cv2.resize(warp, (960,900)))
-        cv2.imshow('frame', cv2.resize(frame_detect, (960,900)))
+            cv2.imshow('warp', warp)
+        cv2.imshow('frame', frame_detect)
 
         key = cv2.waitKey(1)
+        
         if key == 27:
             break
+
         if key == ord('s'):
             i+=1
             cv2.imwrite('images/raw_frame'+str(i) +'.png', raw_frame)
@@ -257,26 +254,25 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
             
         print("FPS:" + str(1.0 / (time.time() - start_time)))
 
-def post_detections(send_detect_in_conn, url_detections):
+def post_detections(send_detect_in_conn, url_detections, is_post):
     while True:
         data = send_detect_in_conn.recv()
-        
-        # print(data)
         try:
-            server_return = requests.post(url_detections, json=data)
-            print('[INFO]: Detections posted.')
+            if is_post:
+                server_return = requests.post(url_detections, json=data)
+                print('[INFO]: Detections posted.')
         except:
             break
 
 if __name__ == '__main__':
-    # cam_source = 2
-    # cam_source = 'delta_robot.mp4'
-    cam_source = 'http://10.41.0.5:8080/?action=stream'
-    url_detections = 'http://10.41.0.5:5000/detections'
-    CAM_CONFIG_PATH = './vision_configs/'
-    MODEL_PATH = './model_configs/'
+
+    IS_ONLINE = False
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
+    MODEL_PATH = './model_configs/'
+    CAM_CONFIG_PATH = './vision_configs/'
+    url_detections = 'http://10.41.0.5:5000/detections'
+    cam_source = 'http://10.41.0.5:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
     
     path_dict = {
     'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',
@@ -319,7 +315,7 @@ if __name__ == '__main__':
 
     stream_reader_process = Process(target=cam_reader, args=(cam_out_conn, cam_source))
     rob_percept_process = Process(target=robot_perception, args=(percept_in_conn, percept_out_conn, config))
-    post_detect_process = Process(target=post_detections, args=(send_detect_in_conn,url_detections))
+    post_detect_process = Process(target=post_detections, args=(send_detect_in_conn,url_detections,IS_ONLINE))
     # start the receiver
     stream_reader_process.start()
     rob_percept_process.start()
