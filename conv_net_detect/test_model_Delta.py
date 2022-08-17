@@ -11,7 +11,31 @@ NUMBER_CLASSES = 3
 CONFIDENCE_THRESHOLD = 0.5
 IOU_THRESHOLD = 0.1
 
+def compute_contour_centre(contour):
+    centre_x, centre_y = 0, 0
+    for i in range(len(contour)):
+        centre_x += contour[i][0][0]
+        centre_y += contour[i][0][1]
+    return int(centre_x/len(contour)), int(centre_y / len(contour))
 
+
+def bbox_contours(frame, bbox):
+    x_min, y_min, x_max, y_max = int(bbox[0] * 270), int(bbox[1] * 180), int(bbox[2] * 270), int(bbox[3] * 180)
+
+    object_cropped = frame[y_min:y_max, x_min:x_max, ...]
+
+    gray = cv2.cvtColor(object_cropped, cv2.COLOR_BGR2GRAY)
+
+    ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    contours_area = list()
+    for contour in contours:
+        contours_area.append(cv2.contourArea(contour))
+
+    object_contour = contours[contours_area.index(max(contours_area))]
+    center_x, center_y = compute_contour_centre(object_contour)
+
+    return (center_x + x_min)/270, (center_y + y_min)/180
 def reshape(image, w, h):
     reshaped_image = cv2.resize(image, (w, h), interpolation=cv2.INTER_NEAREST)
     return reshaped_image

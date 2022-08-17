@@ -26,7 +26,7 @@ classes = ['DISK1','TIRE','WHEEL1']
 def generate_frames(camera):
     while True:
         ret, frame_enc = camera.read()#get_frame()
-        img = frame_enc.copy()#camera.frame
+        img = frame_enc#camera.frame
         
         with open('/home/pi/AI_CV/data.json','r') as f:
             try:
@@ -48,9 +48,9 @@ def generate_frames(camera):
         
         if centroids:
             for i in range(len(centroids)):
-                if int(rectangles[i][0]) / int(rectangles[i][1]) >= 2:
-                    print("CANCEL THE DETECTION")
-                    continue
+                #if int(rectangles[i][0]) / int(rectangles[i][1]) >= 2:
+                #    print("CANCEL THE DETECTION")
+                #    continue
 
                 cv2.rectangle(img, (centroids[i][0], centroids[i][1]),
                              (rectangles[i][0], rectangles[i][1]), colors[labels[i]],2)
@@ -63,7 +63,7 @@ def generate_frames(camera):
 
                 if classes[labels[i]] == "DISK1":
                     place = 4
-                    name = "DISC"
+                    name = "DISK"
                 elif classes[labels[i]] == "WHEEL1":
                     place = 2
                     name = "WHEEL"

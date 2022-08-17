@@ -205,8 +205,8 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
                         box_z = config['plane']['z_tansl'],
                         tag_dict = config['plane']['tag_dict'])
 
-    # model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/RESNET_18_saved.pt",map_location=torch.device(0))
-    model = torch.load("C:/Users/David/PythonProjects/test_environment/delta_robot_detection/MOBILENET_V2_saved.pt",map_location=torch.device(0))
+    # model = torch.load("model_configs/RESNET_18_saved.pt",map_location=torch.device(0))
+    model = torch.load("model_configs/MOBILENET_V2_saved.pt",map_location=torch.device(0))
     model.eval()
     model.cuda()
     

@@ -3,3 +3,4 @@ yolo.weights
 yoloV4_config
 delta_robot.mp4
 images
+__pycache__
