@@ -18,7 +18,7 @@ import argparse
 import cv2
 import math
 import numpy as np
-from conv_net_detect.test_model_Delta import *
+from conv_net_detect.test_model_Delta_v2 import *
 import Detection_models
 from plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
@@ -50,6 +50,8 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
         y1 = int(box[1] * height)
         x2 = int(box[2] * width)
         y2 = int(box[3] * height)
+        x_circle = int(box[6] * width)
+        y_circle = int(box[7] * height)
         
         bbox_thick = int(0.6 * (height + width) / 600)
         if color:
@@ -79,7 +81,9 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             inv_trans = np.linalg.pinv(homog)
 
             c = cv2.perspectiveTransform(np.float32([[[centroid[0], centroid[1]]]]), inv_trans)
+            c_circle = cv2.perspectiveTransform(np.float32([[[x_circle, y_circle]]]), inv_trans)
             centroid = (int(c[0][0][0]),int(c[0][0][1]))
+            centroid_circle = (int(c_circle[0][0][0]),int(c_circle[0][0][1]))
             x1 = centroid[0]-w//2
             y1 = centroid[1]-h//2
             x2 = w//2+centroid[0]
@@ -100,6 +104,7 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             cv2.putText(out_img, 
                         pos_str_y, (centroid[0]-40,centroid[1]+20), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            cv2.circle(out_img, centroid_circle, 3, rgb)
             if cls_id ==0:
                 cls_id = 1
             elif cls_id ==1:
@@ -158,9 +163,7 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         pd.detect_tags_3D(frame_detect)
         plane_dims = {'h':pd.plane_h, 'w':pd.plane_w}
         image_point_dict = pd.box_verts_update
-        # print(image_point_dict)
-        
-        
+
         homography = pd.compute_homog(w_updated_pts=True, w_up_plane=True)
         warp = pd.compute_perspective_trans(raw_frame, w_updated_pts=True, w_up_plane=True)
         

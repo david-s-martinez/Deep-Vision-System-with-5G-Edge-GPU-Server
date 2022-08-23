@@ -175,7 +175,7 @@ def increase_contrast(image):
 
 
 def bbox_circles(frame, bbox):
-
+    circles_img = None
     x_min, y_min, x_max, y_max, predicted_class = int(bbox[0] * IMAGE_WIDTH), int(bbox[1] * IMAGE_HEIGHT), int(bbox[2] * IMAGE_WIDTH), int(bbox[3] * IMAGE_HEIGHT), bbox[4]
     if predicted_class == 1:
         x_min = x_min + 5
@@ -186,7 +186,7 @@ def bbox_circles(frame, bbox):
 
     gray = cv2.cvtColor(object_cropped, cv2.COLOR_BGR2GRAY)
     gray = np.asarray(gray, dtype=np.uint8)
-    gray = increase_contrast(gray)
+    # gray = increase_contrast(gray)
 
     if predicted_class == 0:
         ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
@@ -203,16 +203,17 @@ def bbox_circles(frame, bbox):
         else:
             min_radius, max_radius = int((x_max - x_min) / 2) - 5, int((x_max - x_min) / 2)
         circles_img = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 60,
-                                      param1=300, param2=0.99,
+                                      param1=300, param2=1,
                                        minRadius=min_radius, maxRadius=max_radius)
-        circles_img = np.uint16(np.around(circles_img))
-        center_x, center_y = circles_img[0][0][0], circles_img[0][0][1]
+        if (circles_img is not None):
+            center_x, center_y = circles_img[0][0][0], circles_img[0][0][1]
 
-        for i in circles_img[0, :]:
-            cv2.circle(object_cropped, (i[0], i[1]), i[2], (0, 255, 0), 1)
-            cv2.circle(object_cropped, (i[0], i[1]), 2, (0, 0, 255), 1)
-
-    return (center_x + x_min)/IMAGE_WIDTH, (center_y + y_min)/IMAGE_HEIGHT
+    if (circles_img is not None) or predicted_class == 0:
+        
+        return (center_x + x_min)/IMAGE_WIDTH, (center_y + y_min)/IMAGE_HEIGHT
+    else:
+        centroid = ((x_min+x_max)//2,(y_min+y_max)//2)
+        return centroid[0]/IMAGE_WIDTH, centroid[1]/IMAGE_HEIGHT
 
 
 def get_bboxes(predicted_bboxes, image_index):
