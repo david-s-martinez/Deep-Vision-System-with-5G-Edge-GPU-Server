@@ -74,7 +74,7 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             
             c1, c2 = (x1,y1), (x2, y2)
             centroid = ((x1+x2)//2,(y1+y2)//2)
-            world_centroid = (centroid[0]*plane_dims['w']*10)/width,(centroid[1]*plane_dims['h']*10)/height
+            world_centroid = (x_circle*plane_dims['w']*10)/width,(y_circle*plane_dims['h']*10)/height
             w = int(abs(x2-x1) * 1.8)
             h = int(abs(y2-y1) * 1.8)
 
