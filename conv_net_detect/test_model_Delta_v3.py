@@ -176,17 +176,14 @@ def increase_contrast(image):
 def find_centroids(frame, bbox, templates):
 
     x_min, y_min, x_max, y_max, predicted_class = int(bbox[0] * IMAGE_WIDTH), int(bbox[1] * IMAGE_HEIGHT), int(bbox[2] * IMAGE_WIDTH), int(bbox[3] * IMAGE_HEIGHT), bbox[4]
-    if predicted_class == 1:
-        x_min = x_min + 5
-        x_max -= 5
-        y_min += 5
-        y_max -= 5
+  
     object_cropped = copy.deepcopy(frame[y_min:y_max, x_min:x_max, ...])
 
     gray = cv2.cvtColor(object_cropped, cv2.COLOR_BGR2GRAY)
     gray = np.asarray(gray, dtype=np.uint8)
     gray = increase_contrast(gray)
 
+    # if predicted_class in [0, 1, 2]:
     if predicted_class == 0:
         ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)

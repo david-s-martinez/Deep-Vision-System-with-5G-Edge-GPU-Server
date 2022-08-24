@@ -98,12 +98,12 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
                                     bbox_thick//2,lineType=cv2.LINE_AA)
             pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
             pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
-            cv2.putText(out_img, 
-                        pos_str_x, (centroid[0]-40,centroid[1]), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
-            cv2.putText(out_img, 
-                        pos_str_y, (centroid[0]-40,centroid[1]+20), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            # cv2.putText(out_img, 
+            #             pos_str_x, (centroid[0]-40,centroid[1]), 
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            # cv2.putText(out_img, 
+            #             pos_str_y, (centroid[0]-40,centroid[1]+20), 
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
             cv2.circle(out_img, centroid_circle, 3, rgb)
             if cls_id ==0:
                 cls_id = 1
@@ -147,7 +147,10 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
     model = torch.load(config['neural_net']['model_config'],map_location=torch.device(0))
     model.eval()
     model.cuda()
-    
+    # disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"), 
+    #                             cv2.imread("conv_net_detect/disk_centroid_template_2.png"), 
+    #                             cv2.imread("conv_net_detect/disk_centroid_template_3.png")]
+    disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"),cv2.imread("conv_net_detect/disk_centroid_template_3.png")]
     class_names = ['TIRE','DISK','WHEEL']
     frame = None
     warp = None
@@ -171,6 +174,7 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         *********************** AI PART ***********************
         '''
         if warp is not None:
+            # boxes = detection(warp, model, disk_centroid_templates)
             boxes = detection(warp, model)
             frame_detect, data = plot_boxes(warp, 
                                             frame_detect, 
@@ -210,15 +214,15 @@ def post_detections(send_detect_in_conn, url_detections, is_post):
 
 if __name__ == '__main__':
 
-    IS_ONLINE = False
+    IS_ONLINE = True
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
     MODEL_TYPE = 'mobnet'
     MODEL_PATH = './model_configs/'
     CAM_CONFIG_PATH = './vision_configs/'
-    url_detections = 'http://10.41.0.5:5000/detections'
+    url_detections = 'http://10.41.0.4:5000/detections'
     MODEL = 'MOBILENET_V2_saved.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_saved.pt'
-    cam_source = 'http://10.41.0.5:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
+    cam_source = 'http://10.41.0.4:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
     
     path_dict = {
     'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',

@@ -5,7 +5,7 @@ import albumentations as A
 import numpy as np
 from albumentations.pytorch import ToTensorV2
 import matplotlib.pyplot as plt
-ANCHOR_BOXES = [[3.8] * 2]
+ANCHOR_BOXES = [[3.7] * 2]
 GRID_SIZE_WIDTH = 18
 GRID_SIZE_HEIGHT = 12
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
