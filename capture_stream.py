@@ -18,7 +18,7 @@ import argparse
 import cv2
 import math
 import numpy as np
-from conv_net_detect.test_model_Delta_v2 import *
+from conv_net_detect.test_model_Delta_v3 import *
 import Detection_models
 from plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
@@ -143,8 +143,10 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
                         tag_scaling = config['plane']['tag_scaling'], 
                         box_z = config['plane']['z_tansl'],
                         tag_dict = config['plane']['tag_dict'])
-
-    model = torch.load(config['neural_net']['model_config'],map_location=torch.device(0))
+    model = Detection_models.DetectionModel(number_classes=NUMBER_CLASSES, grid_size_width=GRID_SIZE_WIDTH, grid_size_height=GRID_SIZE_HEIGHT,chosen_model=2)
+    model.load_state_dict(torch.load(config['neural_net']['model_config'], map_location=torch.device(0)))
+    
+    # model = torch.load(config['neural_net']['model_config'],map_location=torch.device(0))
     model.eval()
     model.cuda()
     # disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"), 
@@ -220,9 +222,9 @@ if __name__ == '__main__':
     MODEL_TYPE = 'mobnet'
     MODEL_PATH = './model_configs/'
     CAM_CONFIG_PATH = './vision_configs/'
-    url_detections = 'http://10.41.0.4:5000/detections'
-    MODEL = 'MOBILENET_V2_saved.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_saved.pt'
-    cam_source = 'http://10.41.0.4:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
+    url_detections = 'http://10.41.0.3:5000/detections'
+    MODEL = 'MOBILENET_V2_SECOND_weights_saved_1.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_saved.pt'
+    cam_source = 'http://10.41.0.3:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
     
     path_dict = {
     'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',

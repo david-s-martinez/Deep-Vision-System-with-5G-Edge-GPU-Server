@@ -13,7 +13,7 @@ GRID_SIZE_WIDTH = 18
 GRID_SIZE_HEIGHT = 12
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
 NUMBER_CLASSES = 3
-CONFIDENCE_THRESHOLD = 0.875
+CONFIDENCE_THRESHOLD = 0.8
 IOU_THRESHOLD = 0.1
 IMAGE_HEIGHT = 180
 IMAGE_WIDTH = 270
@@ -176,7 +176,7 @@ def increase_contrast(image):
     return transformations(image=image)["image"]
 
 
-def find_centroids(frame, bbox, templates):
+def find_centroids(frame, bbox):
 
     x_min, y_min, x_max, y_max, predicted_class = int(bbox[0] * IMAGE_WIDTH), int(bbox[1] * IMAGE_HEIGHT), int(bbox[2] * IMAGE_WIDTH), int(bbox[3] * IMAGE_HEIGHT), bbox[4]
     object_cropped = copy.deepcopy(frame[y_min:y_max-4, x_min:x_max, ...])
@@ -199,21 +199,6 @@ def find_centroids(frame, bbox, templates):
         object_contour = contours[contours_area.index(max(contours_area))]
 
         center_x, center_y = compute_contour_centre(object_contour)
-    else:
-
-        method = eval('cv2.TM_CCOEFF_NORMED') #eval("TM_CCORR_NORMED")
-        max_values = list()
-        for template in templates:
-            result = cv2.matchTemplate(object_cropped, template, method)
-            _, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-            max_values.append((max_val, max_loc))
-
-        max_values.sort(reverse=True, key=lambda x: x[0])
-        top_left = max_values[0][1]
-
-        bottom_right = (top_left[0] + templates[0].shape[1], top_left[1] + templates[0].shape[0])
-
-        center_x, center_y = int((top_left[0] + bottom_right[0]) / 2), int((top_left[1] + bottom_right[1]) / 2)
 
     return (center_x + x_min)/IMAGE_WIDTH, (center_y + y_min)/IMAGE_HEIGHT
 
@@ -243,7 +228,7 @@ def get_bboxes(predicted_bboxes, image_index):
     return predicted_bbox_after_non_max_suppression
 
 
-def make_prediction(frame_normalized, frame, model, templates):
+def make_prediction(frame_normalized, frame, model):
     predictions = model(frame_normalized)
 
     predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=0.75)
@@ -263,7 +248,7 @@ def make_prediction(frame_normalized, frame, model, templates):
         y_max = bbox[4] + bbox[6]/2
         confidence_score = bbox[2] if bbox[2] < 1.0 else 1.0
 
-        object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class], templates)
+        object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class])
         if object_centroid is None:
             continue
         if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 10 and predicted_class != 0:
@@ -272,11 +257,10 @@ def make_prediction(frame_normalized, frame, model, templates):
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])
     return bboxes_to_return
 
-
-def detection(frame, model, templates, visualize_detection=False):
+def detection(frame, model, visualize_detection=False):
     frame = copy.deepcopy(reshape(frame, w=IMAGE_WIDTH, h=IMAGE_HEIGHT))
     frame_normalized = image_normalization(image=frame).unsqueeze(0).float().to(DEVICE)
-    bboxes = make_prediction(frame_normalized, frame, model, templates)
+    bboxes = make_prediction(frame_normalized, frame, model)
     if visualize_detection:
         frame = np.ascontiguousarray(frame, dtype=np.float32)
         for bbox in bboxes:
