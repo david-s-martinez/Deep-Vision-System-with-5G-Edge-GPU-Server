@@ -5,12 +5,15 @@ import albumentations as A
 import numpy as np
 from albumentations.pytorch import ToTensorV2
 import matplotlib.pyplot as plt
-ANCHOR_BOXES = [[3.8] * 2]
+
+import Detection_models
+
+ANCHOR_BOXES = [[3.3] * 2]
 GRID_SIZE_WIDTH = 18
 GRID_SIZE_HEIGHT = 12
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
 NUMBER_CLASSES = 3
-CONFIDENCE_THRESHOLD = 0.8
+CONFIDENCE_THRESHOLD = 0.875
 IOU_THRESHOLD = 0.1
 IMAGE_HEIGHT = 180
 IMAGE_WIDTH = 270
@@ -149,11 +152,11 @@ def bbox_contours(frame, bbox):
     x_min, y_min, x_max, y_max = int(bbox[0] * IMAGE_WIDTH), int(bbox[1] * IMAGE_HEIGHT), int(bbox[2] * IMAGE_WIDTH), int(bbox[3] * IMAGE_HEIGHT)
 
     object_cropped = frame[y_min:y_max, x_min:x_max, ...]
-    plt.imshow(object_cropped)
-    plt.show()
+
     gray = cv2.cvtColor(object_cropped, cv2.COLOR_BGR2GRAY)
 
     ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
+
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     contours_area = list()
     for contour in contours:
@@ -161,7 +164,7 @@ def bbox_contours(frame, bbox):
 
     object_contour = contours[contours_area.index(max(contours_area))]
     center_x, center_y = compute_contour_centre(object_contour)
-
+   # y_shift = (80 - y_min) * 0.15 if y_min <= 80 else (y_min - 80) * 0.15
     return (center_x + x_min)/IMAGE_WIDTH, (center_y + y_min)/IMAGE_HEIGHT
 
 
@@ -176,22 +179,25 @@ def increase_contrast(image):
 def find_centroids(frame, bbox, templates):
 
     x_min, y_min, x_max, y_max, predicted_class = int(bbox[0] * IMAGE_WIDTH), int(bbox[1] * IMAGE_HEIGHT), int(bbox[2] * IMAGE_WIDTH), int(bbox[3] * IMAGE_HEIGHT), bbox[4]
-  
-    object_cropped = copy.deepcopy(frame[y_min:y_max, x_min:x_max, ...])
-
+    object_cropped = copy.deepcopy(frame[y_min:y_max-4, x_min:x_max, ...])
+    #print(np.mean(object_cropped) )
+    if np.mean(object_cropped) > 100:
+        return None
+    object_cropped = increase_contrast(object_cropped)
     gray = cv2.cvtColor(object_cropped, cv2.COLOR_BGR2GRAY)
     gray = np.asarray(gray, dtype=np.uint8)
     gray = increase_contrast(gray)
 
-    # if predicted_class in [0, 1, 2]:
-    if predicted_class == 0:
+    if predicted_class in [0, 1, 2]:
         ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
+
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         contours_area = list()
         for contour in contours:
             contours_area.append(cv2.contourArea(contour))
 
         object_contour = contours[contours_area.index(max(contours_area))]
+
         center_x, center_y = compute_contour_centre(object_contour)
     else:
 
@@ -212,11 +218,25 @@ def find_centroids(frame, bbox, templates):
     return (center_x + x_min)/IMAGE_WIDTH, (center_y + y_min)/IMAGE_HEIGHT
 
 
+def euclidean_distance(point_1, point_2):
+    x_1 = point_1[0] * IMAGE_WIDTH
+    x_2 = point_2[0] * IMAGE_WIDTH
+    y_1 = point_1[1] * IMAGE_HEIGHT
+    y_2 = point_2[1] * IMAGE_HEIGHT
+    return np.sqrt((x_2 - x_1)**2 + (y_1 - y_2)**2)
+
+
 def get_bboxes(predicted_bboxes, image_index):
 
     bboxes_predicted_relative_image = convert_cell_to_image(predicted_bboxes[..., 4:])
     predicted_class = predicted_bboxes[..., :NUMBER_CLASSES].argmax(-1).unsqueeze(-1)
-    predicted_bboxes_modified = torch.cat([predicted_class, predicted_bboxes[..., NUMBER_CLASSES:NUMBER_CLASSES + 1], bboxes_predicted_relative_image], dim=-1)
+    confidence_score = predicted_bboxes[..., NUMBER_CLASSES:NUMBER_CLASSES + 1]
+    class_probs, _ = torch.max(torch.max(torch.softmax(predicted_bboxes[..., :NUMBER_CLASSES], -1), confidence_score), -1)
+    #print(class_probs.shape)
+    #print(predicted_bboxes[..., :NUMBER_CLASSES])
+    #print(class_probs.shape)
+    #print(confidence_score.shape)
+    predicted_bboxes_modified = torch.cat([predicted_class, confidence_score, bboxes_predicted_relative_image], dim=-1)
     predicted_bboxes_list = get_bboxes_list(predicted_bboxes_modified, is_predictions=True, index=image_index)
     predicted_bbox_after_non_max_suppression = non_maxima_suppression(predicted_bboxes_list)
 
@@ -231,15 +251,25 @@ def make_prediction(frame_normalized, frame, model, templates):
     bboxes = get_bboxes(predicted_bboxes=predictions, image_index=0)[0]
     bboxes_to_return = list()
     for bbox in bboxes:
+        if bbox[3] >= 0.88 or bbox[3] <= 0.12 or bbox[4] <= 0.21 or bbox[4] >= 0.93:
+            continue
+        predicted_class = bbox[1]
+        if predicted_class == 1:
+            bbox[5] *= 0.85
+            bbox[6] *= 0.85
         x_min = bbox[3] - bbox[5]/2
         y_min = bbox[4] - bbox[6]/2
         x_max = bbox[3] + bbox[5]/2
         y_max = bbox[4] + bbox[6]/2
         confidence_score = bbox[2] if bbox[2] < 1.0 else 1.0
-        predicted_class = bbox[1]
 
         object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class], templates)
-        bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])
+        if object_centroid is None:
+            continue
+        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 10 and predicted_class != 0:
+            bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, (bbox[3]), (bbox[4]) ])
+        else:
+            bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])
     return bboxes_to_return
 
 
@@ -258,7 +288,9 @@ def detection(frame, model, templates, visualize_detection=False):
 
 if __name__ == "__main__":
     disk_centroid_templates = [cv2.imread("disk_centroid_template_1.png"), cv2.imread("disk_centroid_template_2.png"), cv2.imread("disk_centroid_template_3.png")]
-    frame = cv2.imread("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/warp_images_test_segmentation/warp_frame3835.png")
-    model = torch.load("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/RESNET_18_saved.pt", map_location=torch.device(DEVICE))
+    frame = cv2.imread("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/warp_images_test_segmentation/warp_frame415.png")
+    model = Detection_models.DetectionModel(number_classes=NUMBER_CLASSES, grid_size_width=GRID_SIZE_WIDTH, grid_size_height=GRID_SIZE_HEIGHT,chosen_model=2)
+    model.load_state_dict(torch.load("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/MOBILENET_V2_SECOND_weights_saved_1.pt", map_location="cpu"))
+    #model = torch.load("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/RESNET_18_saved.pt", map_location=torch.device(DEVICE))
     model.eval()
-    bboxes = detection(frame=frame, model=model, templates=disk_centroid_templates, visualize_detection=True)
+    bboxes = detection(frame=frame, model=model, templates=disk_centroid_templates, visualize_detection=False)
