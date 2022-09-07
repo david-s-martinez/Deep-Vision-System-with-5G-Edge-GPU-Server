@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 import Detection_models
 
-ANCHOR_BOXES = [[3.3] * 2]
+ANCHOR_BOXES = [[3.2] * 2]
 GRID_SIZE_WIDTH = 18
 GRID_SIZE_HEIGHT = 12
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
@@ -240,8 +240,8 @@ def make_prediction(frame_normalized, frame, model):
             continue
         predicted_class = bbox[1]
         if predicted_class == 1:
-            bbox[5] *= 0.85
-            bbox[6] *= 0.85
+            bbox[5] *= 0.8
+            bbox[6] *= 0.8
         x_min = bbox[3] - bbox[5]/2
         y_min = bbox[4] - bbox[6]/2
         x_max = bbox[3] + bbox[5]/2
@@ -251,7 +251,7 @@ def make_prediction(frame_normalized, frame, model):
         object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class])
         if object_centroid is None:
             continue
-        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 10 and predicted_class != 0:
+        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 3 and predicted_class != 0:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, (bbox[3]), (bbox[4]) ])
         else:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])

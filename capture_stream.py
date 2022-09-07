@@ -98,12 +98,12 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
                                     bbox_thick//2,lineType=cv2.LINE_AA)
             pos_str_x = str('x:'+str(round(world_centroid[0]/10,2)))
             pos_str_y = str('y:'+str(round(world_centroid[1]/10,2)))
-            # cv2.putText(out_img, 
-            #             pos_str_x, (centroid[0]-40,centroid[1]), 
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
-            # cv2.putText(out_img, 
-            #             pos_str_y, (centroid[0]-40,centroid[1]+20), 
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            cv2.putText(out_img, 
+                        pos_str_x, (centroid[0]-40,centroid[1]+20), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
+            cv2.putText(out_img, 
+                        pos_str_y, (centroid[0]-40,centroid[1]+40), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, rgb, 1)
             cv2.circle(out_img, centroid_circle, 3, rgb)
             if cls_id ==0:
                 cls_id = 1
@@ -190,7 +190,8 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
             percept_out_conn.send(data)
             warp = cv2.resize(warp, (warp.shape[1]*4,warp.shape[0]*4))
             cv2.imshow('warp', warp)
-        cv2.imshow('frame', cv2.resize(frame_detect,(frame_detect.shape[1]*2,frame_detect.shape[0]*2)))
+        img_scaling = 2.3
+        cv2.imshow('frame', cv2.resize(frame_detect,(int(frame_detect.shape[1]*img_scaling),int(frame_detect.shape[0]*img_scaling))))
 
         key = cv2.waitKey(1)
         
