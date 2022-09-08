@@ -8,12 +8,12 @@ import matplotlib.pyplot as plt
 
 import Detection_models
 
-ANCHOR_BOXES = [[3.2] * 2]
+ANCHOR_BOXES = [[3.5] * 2]
 GRID_SIZE_WIDTH = 18
 GRID_SIZE_HEIGHT = 12
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
 NUMBER_CLASSES = 3
-CONFIDENCE_THRESHOLD = 0.8
+CONFIDENCE_THRESHOLD = 0.75
 IOU_THRESHOLD = 0.1
 IMAGE_HEIGHT = 180
 IMAGE_WIDTH = 270
@@ -231,8 +231,8 @@ def get_bboxes(predicted_bboxes, image_index):
 def make_prediction(frame_normalized, frame, model):
     predictions = model(frame_normalized)
 
-    predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=0.75)
-    predictions[..., 6:] = torch.tensor(ANCHOR_BOXES).reshape(1, 1, 1, 2).to(DEVICE) * modified_sigmoid(predictions[..., 6:], coefficient=0.75)
+    predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=0.5)
+    predictions[..., 6:] = torch.tensor(ANCHOR_BOXES).reshape(1, 1, 1, 2).to(DEVICE) * modified_sigmoid(predictions[..., 6:], coefficient=0.5)
     bboxes = get_bboxes(predicted_bboxes=predictions, image_index=0)[0]
     bboxes_to_return = list()
     for bbox in bboxes:
@@ -240,8 +240,8 @@ def make_prediction(frame_normalized, frame, model):
             continue
         predicted_class = bbox[1]
         if predicted_class == 1:
-            bbox[5] *= 0.8
-            bbox[6] *= 0.8
+            bbox[5] *= 0.85
+            bbox[6] *= 0.85
         x_min = bbox[3] - bbox[5]/2
         y_min = bbox[4] - bbox[6]/2
         x_max = bbox[3] + bbox[5]/2
@@ -251,7 +251,7 @@ def make_prediction(frame_normalized, frame, model):
         object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class])
         if object_centroid is None:
             continue
-        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 3 and predicted_class != 0:
+        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 7.5 and predicted_class != 0:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, (bbox[3]), (bbox[4]) ])
         else:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])

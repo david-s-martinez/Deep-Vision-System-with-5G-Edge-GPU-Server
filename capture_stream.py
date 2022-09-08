@@ -217,7 +217,7 @@ def post_detections(send_detect_in_conn, url_detections, is_post):
 
 if __name__ == '__main__':
 
-    IS_ONLINE = True
+    IS_ONLINE = False
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
     MODEL_TYPE = 'mobnet'
