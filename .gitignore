@@ -4,3 +4,5 @@ yoloV4_config
 delta_robot.mp4
 images
 __pycache__
+model_configs\MOBILENET_V2_FINER_GRID_2_weights_saved.pt
+model_configs\MOBILENET_V2_FINER_GRID_2_weights_saved.pt

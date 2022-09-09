@@ -217,15 +217,15 @@ def post_detections(send_detect_in_conn, url_detections, is_post):
 
 if __name__ == '__main__':
 
-    IS_ONLINE = False
+    IS_ONLINE = True
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
     MODEL_TYPE = 'mobnet'
     MODEL_PATH = './model_configs/'
     CAM_CONFIG_PATH = './vision_configs/'
-    url_detections = 'http://10.41.0.3:5000/detections'
+    url_detections = 'http://10.41.0.4:5000/detections'
     MODEL = 'MOBILENET_V2_SECOND_weights_saved_1.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_saved.pt'
-    cam_source = 'http://10.41.0.3:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
+    cam_source = 'http://10.41.0.4:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
     
     path_dict = {
     'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',
