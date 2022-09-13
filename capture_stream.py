@@ -23,6 +23,7 @@ import Detection_models
 from plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
 from multiprocessing import Pipe
+import torch.multiprocessing as mp
 
 def get_color(c, x, max_val):
     colors = np.array([[1, 0, 1], [0, 0, 1], [0, 1, 1], [0, 1, 0], [1, 1, 0], [1, 0, 0]], dtype=np.float32)
@@ -52,7 +53,6 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
         y2 = int(box[3] * height)
         x_circle = int(box[6] * width)
         y_circle = int(box[7] * height)
-        
         bbox_thick = int(0.6 * (height + width) / 600)
         if color:
             rgb = color
@@ -60,7 +60,7 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             rgb = (255, 0, 0)
         if len(box) >= 6 and class_names:
             cls_conf = box[4]
-            cls_id = box[5]
+            cls_id = round(box[5])
             classes = len(class_names)
             offset = cls_id * 123457 % classes
             red = get_color(2, offset, classes)
@@ -75,8 +75,8 @@ def plot_boxes(img ,out_img, boxes,image_point_dict, index_of_marker,homog,corne
             c1, c2 = (x1,y1), (x2, y2)
             centroid = ((x1+x2)//2,(y1+y2)//2)
             world_centroid = (x_circle*plane_dims['w']*10)/width,(y_circle*plane_dims['h']*10)/height
-            w = int(abs(x2-x1) * 1.8)
-            h = int(abs(y2-y1) * 1.8)
+            w = int(abs(x2-x1) * 2.2)
+            h = int(abs(y2-y1) * 2.2)
 
             inv_trans = np.linalg.pinv(homog)
 
@@ -149,14 +149,15 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
     # model = torch.load(config['neural_net']['model_config'],map_location=torch.device(0))
     model.eval()
     model.cuda()
-    # disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"), 
-    #                             cv2.imread("conv_net_detect/disk_centroid_template_2.png"), 
-    #                             cv2.imread("conv_net_detect/disk_centroid_template_3.png")]
-    disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"),cv2.imread("conv_net_detect/disk_centroid_template_3.png")]
+    disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"),
+                                cv2.imread("conv_net_detect/disk_centroid_template_2.png"),
+                                 cv2.imread("conv_net_detect/disk_centroid_template_3.png")]
+    #disk_centroid_templates = [cv2.imread("conv_net_detect/disk_centroid_template_1.png"),cv2.imread("conv_net_detect/disk_centroid_template_3.png")]
     class_names = ['TIRE','DISK','WHEEL']
     frame = None
     warp = None
     i=0
+    object_dict = {}
     while True:
         
         start_time = time.time()
@@ -175,9 +176,12 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
         '''
         *********************** AI PART ***********************
         '''
+
         if warp is not None:
-            # boxes = detection(warp, model, disk_centroid_templates)
-            boxes = detection(warp, model)
+            boxes = detection(warp, model, disk_centroid_templates)
+            #boxes = detection(warp, model)
+            boxes, object_dict = object_tracking(object_dict, boxes)
+            torch.cuda.empty_cache()
             frame_detect, data = plot_boxes(warp, 
                                             frame_detect, 
                                             boxes, 
@@ -217,15 +221,16 @@ def post_detections(send_detect_in_conn, url_detections, is_post):
 
 if __name__ == '__main__':
 
+    mp.set_start_method("spawn")
     IS_ONLINE = True
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
     MODEL_TYPE = 'mobnet'
     MODEL_PATH = './model_configs/'
     CAM_CONFIG_PATH = './vision_configs/'
-    url_detections = 'http://10.41.0.4:5000/detections'
-    MODEL = 'MOBILENET_V2_SECOND_weights_saved_1.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_saved.pt'
-    cam_source = 'http://10.41.0.4:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
+    url_detections = 'http://10.41.0.2:5000/detections'
+    MODEL = 'MOBILENET_V2_FINER_GRID_2_weights_saved.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_FINER_GRID_2_weights_saved.pt'
+    cam_source = 'http://10.41.0.2:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
     
     path_dict = {
     'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',

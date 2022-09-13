@@ -8,15 +8,114 @@ import matplotlib.pyplot as plt
 
 import Detection_models
 
-ANCHOR_BOXES = [[3.5] * 2]
-GRID_SIZE_WIDTH = 18
-GRID_SIZE_HEIGHT = 12
+ANCHOR_BOXES = [[5.5] * 2]
+GRID_SIZE_WIDTH = 27
+GRID_SIZE_HEIGHT = 18
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
 NUMBER_CLASSES = 3
-CONFIDENCE_THRESHOLD = 0.75
+CONFIDENCE_THRESHOLD = 0.8
 IOU_THRESHOLD = 0.1
 IMAGE_HEIGHT = 180
 IMAGE_WIDTH = 270
+
+
+def compute_iou(bbox_1, bbox_2):
+	x_min = max(bbox_1[0], bbox_2[0])
+	y_min = max(bbox_1[1], bbox_2[1])
+	x_max = min(bbox_1[2], bbox_2[2])
+	y_max = min(bbox_1[3], bbox_2[3])
+
+	height = (y_max - y_min) if (y_max - y_min) > 0 else 0
+	width = (x_max - x_min) if (x_max - x_min) > 0 else 0
+
+	intersection = height * width
+
+	union = np.abs((bbox_1[2] - bbox_1[0]) * (bbox_1[3] - bbox_1[1])) + \
+	        np.abs((bbox_2[2] - bbox_2[0]) * (bbox_2[3] - bbox_2[1])) - \
+	        intersection
+
+	return intersection/(union + 0.00001)
+
+
+def object_tracking(objects_dict, boxes):
+    if len(objects_dict.keys()) == 0:
+        for index in range(len(objects_dict.keys()), len(boxes)):
+            objects_dict[str(index)] = boxes[index]
+    elif len(objects_dict.keys()) < len(boxes) and len(objects_dict.keys()) != 0:
+        new_instances_to_add = list()
+        for key, value in objects_dict.items():
+            for bbox in boxes:
+                iou = compute_iou(bbox_1=[bbox[0], bbox[1], bbox[2], bbox[3]], bbox_2=[value[0], value[1], value[2], value[3]])
+                if iou < 0.25:
+                    new_instances_to_add.append(bbox)
+        for index in range(len(objects_dict.keys()), len(objects_dict.keys()) + len(new_instances_to_add)):
+            objects_dict[str(index)] = new_instances_to_add[index - len(objects_dict.keys())]
+    elif len(boxes) < len(objects_dict.keys()):
+        key_list = list(objects_dict.keys())
+        values_list = list(objects_dict.values())
+
+        for index_1 in range(len(values_list)):
+            for index_2 in range(index_1, len(values_list)):
+                iou = compute_iou(bbox_1=[values_list[index_1][0], values_list[index_1][1],
+                                          values_list[index_1][2], values_list[index_1][3]],
+                                  bbox_2=[values_list[index_2][0], values_list[index_2][1],
+                                          values_list[index_2][2], values_list[index_2][3]])
+                if iou > 0.9 and key_list[index_2] in objects_dict.keys():
+                    objects_dict.pop(key_list[index_2])
+
+        keys_to_preserve = list()
+        for key, value in objects_dict.items():
+            for bbox in boxes:
+                iou = compute_iou(bbox_1=[bbox[0], bbox[1], bbox[2], bbox[3]], bbox_2=[value[0], value[1], value[2], value[3]])
+                if iou >= 0.1:
+                    keys_to_preserve.append(key)
+                    break
+        keys_to_delete = list()
+        for key in objects_dict.keys():
+            if key not in keys_to_preserve:
+                keys_to_delete.append(key)
+        for key in keys_to_delete:
+            objects_dict.pop(key)
+    elif len(boxes) == len(objects_dict.keys()) and len(boxes) > 0:
+        list_keys = list()
+        list_boxes = list()
+        for key in objects_dict.keys():
+            for box in boxes:
+                iou = compute_iou(bbox_1=[box[0], box[1], box[2], box[3]],
+                                  bbox_2=[objects_dict[key][0], objects_dict[key][1],
+                                          objects_dict[key][2], objects_dict[key][3]])
+                if iou > 0.5:
+                    list_boxes.append(box)
+                    list_keys.append(key)
+                    break
+        if len(list_boxes) < len(boxes):
+            key_not_in_list = None
+            for key in objects_dict.keys():
+                if key not in list_keys:
+                    key_not_in_list = key
+            box_not_in_list = None
+            for box in boxes:
+                if box not in list_boxes:
+                    box_not_in_list = box
+
+            objects_dict[key_not_in_list] = box_not_in_list
+    beta = 0.95
+    for key, value in objects_dict.items():
+        for bbox in boxes:
+            iou = compute_iou(bbox_1=[bbox[0], bbox[1], bbox[2], bbox[3]], bbox_2=[value[0], value[1], value[2], value[3]])
+            if iou >= 0.1:
+                center_x = objects_dict[key][-2] * beta + bbox[-2] * (1 - beta)
+                center_y = objects_dict[key][-1] * beta + bbox[-1] * (1 - beta)
+                x_min = objects_dict[key][0] * beta + bbox[0] * (1 - beta)
+                y_min = objects_dict[key][1] * beta + bbox[1] * (1 - beta)
+                x_max = objects_dict[key][2] * beta + bbox[2] * (1 - beta)
+                y_max = objects_dict[key][3] * beta + bbox[3] * (1 - beta)
+                predicted_class = objects_dict[key][5] * beta + bbox[5] * (1 - beta)
+                objects_dict[key] = [x_min, y_min, x_max, y_max, bbox[4], predicted_class, center_x, center_y]
+                break
+    boxes = [value for value in objects_dict.values()]
+
+    return boxes, objects_dict
 
 
 def plot_bbox(frame, bbox, is_prediction=True):
@@ -109,8 +208,8 @@ def non_maxima_suppression(predicted_bboxes):
         while predicted_bboxes_single_image:
             picked_bbox = predicted_bboxes_single_image.pop(0)
 
-            predicted_bboxes_single_image = [bbox for bbox in predicted_bboxes_single_image if compute_IOU(torch.tensor(picked_bbox[3:]), torch.tensor(bbox[3:])) < IOU_THRESHOLD or bbox[1] !=
-                                             picked_bbox[1]]
+            predicted_bboxes_single_image = [bbox for bbox in predicted_bboxes_single_image if compute_IOU(torch.tensor(picked_bbox[3:]), torch.tensor(bbox[3:])) < IOU_THRESHOLD] #or bbox[1] !=
+                                                #picked_bbox[1]]
 
             single_image_predictions_non_max_suppression.append(picked_bbox)
         predictions_after_non_max_suppression.append(single_image_predictions_non_max_suppression)
@@ -176,10 +275,10 @@ def increase_contrast(image):
     return transformations(image=image)["image"]
 
 
-def find_centroids(frame, bbox):
+def find_centroids(frame, bbox, templates):
 
     x_min, y_min, x_max, y_max, predicted_class = int(bbox[0] * IMAGE_WIDTH), int(bbox[1] * IMAGE_HEIGHT), int(bbox[2] * IMAGE_WIDTH), int(bbox[3] * IMAGE_HEIGHT), bbox[4]
-    object_cropped = copy.deepcopy(frame[y_min:y_max-4, x_min:x_max, ...])
+    object_cropped = copy.deepcopy(frame[y_min:y_max, x_min:x_max, ...])
     #print(np.mean(object_cropped) )
     if np.mean(object_cropped) > 100:
         return None
@@ -188,8 +287,17 @@ def find_centroids(frame, bbox):
     gray = np.asarray(gray, dtype=np.uint8)
     gray = increase_contrast(gray)
 
-    if predicted_class in [0, 1, 2]:
-        ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
+    if predicted_class in [0]:
+        gray = cv2.Canny(gray, 30, 50, apertureSize=3)
+        circles_img = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 60,
+                                       param1=300, param2=1, minRadius=18, maxRadius=22)
+        if (circles_img is not None):
+            center_x = int(circles_img[0][0][0])
+            center_y = int(circles_img[0][0][1])
+        else:
+            center_x = int((x_max + x_min) / 2)
+            center_y = int((y_max + y_min) / 2)
+        '''ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
 
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         contours_area = list()
@@ -198,8 +306,82 @@ def find_centroids(frame, bbox):
 
         object_contour = contours[contours_area.index(max(contours_area))]
 
-        center_x, center_y = compute_contour_centre(object_contour)
+        center_x, center_y = compute_contour_centre(object_contour)'''
+    elif predicted_class in [2]:
+        ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
 
+        #contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+        if predicted_class == 1:
+            min_rad, max_rad = 20, 25
+        else:
+            min_rad, max_rad = 25, 30
+        circles_img = cv2.HoughCircles(thresh, cv2.HOUGH_GRADIENT, 1, 60,
+                                       param1=300, param2=1, minRadius=min_rad, maxRadius=max_rad)
+        #print(circles_img)
+        center_x_1 = 0
+        center_y_1 = 0
+        if (circles_img is not None):
+            for circ in circles_img:
+                center_x_1 += int(circ[0][0])
+                center_y_1 += int(circ[0][1])
+            center_y_1 /= len(circles_img)
+            center_x_1 /= len(circles_img)
+        else:
+            center_x_1 = int((x_max + x_min) / 2)
+            center_y_1 = int((y_max + y_min) / 2)
+    #elif predicted_class in [1, 2]:
+        methods_names = ["cv2.TM_SQDIFF_NORMED", "cv2.TM_CCORR_NORMED", 'cv2.TM_CCOEFF_NORMED']
+        center_x_2 = 0
+        center_y_2 = 0
+        for method_name in methods_names:
+            method = eval(method_name)  # eval("TM_CCORR_NORMED")
+            match_values = list()
+            for template in templates:
+                result = cv2.matchTemplate(object_cropped, template, method)
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                if method_name == "cv2.TM_SQDIFF_NORMED":
+                    match_values.append((min_val, min_loc))
+                else:
+                    match_values.append((max_val, max_loc))
+            if method_name == "cv2.TM_SQDIFF_NORMED":
+                match_values.sort(reverse=False, key=lambda x: x[0])
+            else:
+                match_values.sort(reverse=True, key=lambda x: x[0])
+            top_left = match_values[0][1]
+            bottom_right = (top_left[0] + templates[0].shape[1], top_left[1] + templates[0].shape[0])
+            center_x_2 += int((top_left[0] + bottom_right[0]) / 2)
+            center_y_2 += int((top_left[1] + bottom_right[1]) / 2)
+        center_y_2 /= 3
+        center_x_2 /= 3
+        center_x = center_x_1 + center_x_2
+        center_y = center_y_1 + center_y_2
+        center_x /= 2
+        center_y /= 2
+    elif predicted_class in [1]:
+        methods_names = ["cv2.TM_SQDIFF_NORMED", "cv2.TM_CCORR_NORMED", 'cv2.TM_CCOEFF_NORMED']
+        center_x_2 = 0
+        center_y_2 = 0
+        for method_name in methods_names:
+            method = eval(method_name)  # eval("TM_CCORR_NORMED")
+            match_values = list()
+            for template in templates:
+                result = cv2.matchTemplate(object_cropped, template, method)
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                if method_name == "cv2.TM_SQDIFF_NORMED":
+                    match_values.append((min_val, min_loc))
+                else:
+                    match_values.append((max_val, max_loc))
+            if method_name == "cv2.TM_SQDIFF_NORMED":
+                match_values.sort(reverse=False, key=lambda x: x[0])
+            else:
+                match_values.sort(reverse=True, key=lambda x: x[0])
+            top_left = match_values[0][1]
+            bottom_right = (top_left[0] + templates[0].shape[1], top_left[1] + templates[0].shape[0])
+            center_x_2 += int((top_left[0] + bottom_right[0]) / 2)
+            center_y_2 += int((top_left[1] + bottom_right[1]) / 2)
+        center_x = center_x_2 / 3
+        center_y = center_y_2 / 3
     return (center_x + x_min)/IMAGE_WIDTH, (center_y + y_min)/IMAGE_HEIGHT
 
 
@@ -228,11 +410,11 @@ def get_bboxes(predicted_bboxes, image_index):
     return predicted_bbox_after_non_max_suppression
 
 
-def make_prediction(frame_normalized, frame, model):
+def make_prediction(frame_normalized, frame, model, templates):
     predictions = model(frame_normalized)
 
-    predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=0.5)
-    predictions[..., 6:] = torch.tensor(ANCHOR_BOXES).reshape(1, 1, 1, 2).to(DEVICE) * modified_sigmoid(predictions[..., 6:], coefficient=0.5)
+    predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=1)
+    predictions[..., 6:] = torch.tensor(ANCHOR_BOXES).reshape(1, 1, 1, 2).to(DEVICE) * modified_sigmoid(predictions[..., 6:], coefficient=1)
     bboxes = get_bboxes(predicted_bboxes=predictions, image_index=0)[0]
     bboxes_to_return = list()
     for bbox in bboxes:
@@ -240,27 +422,28 @@ def make_prediction(frame_normalized, frame, model):
             continue
         predicted_class = bbox[1]
         if predicted_class == 1:
-            bbox[5] *= 0.85
-            bbox[6] *= 0.85
+            bbox[5] *= 0.9
+            bbox[6] *= 0.9
         x_min = bbox[3] - bbox[5]/2
         y_min = bbox[4] - bbox[6]/2
         x_max = bbox[3] + bbox[5]/2
         y_max = bbox[4] + bbox[6]/2
         confidence_score = bbox[2] if bbox[2] < 1.0 else 1.0
 
-        object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class])
+        object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class], templates)
         if object_centroid is None:
             continue
-        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 7.5 and predicted_class != 0:
-            bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, (bbox[3]), (bbox[4]) ])
+        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 25 and predicted_class != 0:
+            bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, (bbox[3]), (bbox[4])])
         else:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])
     return bboxes_to_return
 
-def detection(frame, model, visualize_detection=False):
+
+def detection(frame, model, templates, visualize_detection=False):
     frame = copy.deepcopy(reshape(frame, w=IMAGE_WIDTH, h=IMAGE_HEIGHT))
     frame_normalized = image_normalization(image=frame).unsqueeze(0).float().to(DEVICE)
-    bboxes = make_prediction(frame_normalized, frame, model)
+    bboxes = make_prediction(frame_normalized, frame, model, templates)
     if visualize_detection:
         frame = np.ascontiguousarray(frame, dtype=np.float32)
         for bbox in bboxes:
@@ -272,9 +455,9 @@ def detection(frame, model, visualize_detection=False):
 
 if __name__ == "__main__":
     disk_centroid_templates = [cv2.imread("disk_centroid_template_1.png"), cv2.imread("disk_centroid_template_2.png"), cv2.imread("disk_centroid_template_3.png")]
-    frame = cv2.imread("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/warp_images_test_segmentation/warp_frame415.png")
-    model = Detection_models.DetectionModel(number_classes=NUMBER_CLASSES, grid_size_width=GRID_SIZE_WIDTH, grid_size_height=GRID_SIZE_HEIGHT,chosen_model=2)
-    model.load_state_dict(torch.load("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/MOBILENET_V2_SECOND_weights_saved_1.pt", map_location="cpu"))
+    frame = cv2.imread("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/warp_images_test_segmentation/warp_frame520.png")
+    model = Detection_models.DetectionModel(number_classes=NUMBER_CLASSES, grid_size_width=GRID_SIZE_WIDTH, grid_size_height=GRID_SIZE_HEIGHT, chosen_model=0)
+    model.load_state_dict(torch.load("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/RESNET_18_FINER_GRID_2_weights_saved.pt", map_location="cpu"))
     #model = torch.load("/Users/artemmoroz/Desktop/CIIRC_projects/Detection_artificial_dataset_v3/RESNET_18_saved.pt", map_location=torch.device(DEVICE))
     model.eval()
-    bboxes = detection(frame=frame, model=model, templates=disk_centroid_templates, visualize_detection=False)
+    bboxes = detection(frame=frame, model=model, templates=disk_centroid_templates, visualize_detection=True)

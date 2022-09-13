@@ -281,8 +281,8 @@ def non_maxima_suppression(predicted_bboxes):
         while predicted_bboxes_single_image:
             picked_bbox = predicted_bboxes_single_image.pop(0)
 
-            predicted_bboxes_single_image = [bbox for bbox in predicted_bboxes_single_image if compute_IOU(torch.tensor(picked_bbox[3:]), torch.tensor(bbox[3:])) < IOU_THRESHOLD or bbox[1] !=
-                                             picked_bbox[1]]
+            predicted_bboxes_single_image = [bbox for bbox in predicted_bboxes_single_image if compute_IOU(torch.tensor(picked_bbox[3:]), torch.tensor(bbox[3:])) < IOU_THRESHOLD ]#or bbox[1] !=
+                                             #picked_bbox[1]]
 
             single_image_predictions_non_max_suppression.append(picked_bbox)
         predictions_after_non_max_suppression.append(single_image_predictions_non_max_suppression)

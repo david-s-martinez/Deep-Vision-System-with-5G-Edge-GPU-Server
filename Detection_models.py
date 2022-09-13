@@ -49,5 +49,5 @@ class DetectionModel(torch.nn.Module):
 
 	@staticmethod
 	def _create_fully_connected_layers(grid_size_width, grid_size_height, number_classes, num_input_params):
-		return torch.nn.Sequential(torch.nn.Flatten(), torch.nn.Linear(num_input_params, 512), torch.nn.Dropout(DROPOUT),
-		                           torch.nn.LeakyReLU(0.1), torch.nn.Linear(512, grid_size_width * grid_size_height * (number_classes + 5)))
+		return torch.nn.Sequential(torch.nn.Flatten(), torch.nn.Linear(num_input_params, 1024), torch.nn.Dropout(DROPOUT),
+		                           torch.nn.LeakyReLU(0.1), torch.nn.Linear(1024, grid_size_width * grid_size_height * (number_classes + 5)))
