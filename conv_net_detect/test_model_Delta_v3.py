@@ -8,12 +8,12 @@ import matplotlib.pyplot as plt
 
 import Detection_models
 
-ANCHOR_BOXES = [[5.5] * 2]
+ANCHOR_BOXES = [[4.9] * 2]
 GRID_SIZE_WIDTH = 27
 GRID_SIZE_HEIGHT = 18
 DEVICE = 0 if torch.cuda.is_available() else "cpu"
-NUMBER_CLASSES = 3
-CONFIDENCE_THRESHOLD = 0.8
+NUMBER_CLASSES = 2
+CONFIDENCE_THRESHOLD = 0.75
 IOU_THRESHOLD = 0.1
 IMAGE_HEIGHT = 180
 IMAGE_WIDTH = 270
@@ -99,7 +99,7 @@ def object_tracking(objects_dict, boxes):
                     box_not_in_list = box
 
             objects_dict[key_not_in_list] = box_not_in_list
-    beta = 0.95
+    beta = 0.99
     for key, value in objects_dict.items():
         for bbox in boxes:
             iou = compute_iou(bbox_1=[bbox[0], bbox[1], bbox[2], bbox[3]], bbox_2=[value[0], value[1], value[2], value[3]])
@@ -395,7 +395,7 @@ def euclidean_distance(point_1, point_2):
 
 def get_bboxes(predicted_bboxes, image_index):
 
-    bboxes_predicted_relative_image = convert_cell_to_image(predicted_bboxes[..., 4:])
+    bboxes_predicted_relative_image = convert_cell_to_image(predicted_bboxes[..., 3:])
     predicted_class = predicted_bboxes[..., :NUMBER_CLASSES].argmax(-1).unsqueeze(-1)
     confidence_score = predicted_bboxes[..., NUMBER_CLASSES:NUMBER_CLASSES + 1]
     class_probs, _ = torch.max(torch.max(torch.softmax(predicted_bboxes[..., :NUMBER_CLASSES], -1), confidence_score), -1)
@@ -413,15 +413,19 @@ def get_bboxes(predicted_bboxes, image_index):
 def make_prediction(frame_normalized, frame, model, templates):
     predictions = model(frame_normalized)
 
-    predictions[..., 4:6] = modified_sigmoid(predictions[..., 4:6], coefficient=1)
-    predictions[..., 6:] = torch.tensor(ANCHOR_BOXES).reshape(1, 1, 1, 2).to(DEVICE) * modified_sigmoid(predictions[..., 6:], coefficient=1)
+    predictions[..., 3:5] = modified_sigmoid(predictions[..., 3:5], coefficient=1)
+    predictions[..., 5:] = torch.tensor(ANCHOR_BOXES).reshape(1, 1, 1, 2).to(DEVICE) * modified_sigmoid(predictions[..., 5:], coefficient=1)
     bboxes = get_bboxes(predicted_bboxes=predictions, image_index=0)[0]
     bboxes_to_return = list()
     for bbox in bboxes:
         if bbox[3] >= 0.88 or bbox[3] <= 0.12 or bbox[4] <= 0.21 or bbox[4] >= 0.93:
             continue
         predicted_class = bbox[1]
-        if predicted_class == 1:
+        if predicted_class == 0:
+            predicted_class = 1
+        else:
+            predicted_class = 0
+        if predicted_class == 0:
             bbox[5] *= 0.9
             bbox[6] *= 0.9
         x_min = bbox[3] - bbox[5]/2
@@ -433,7 +437,7 @@ def make_prediction(frame_normalized, frame, model, templates):
         object_centroid = find_centroids(frame, [x_min, y_min, x_max, y_max, predicted_class], templates)
         if object_centroid is None:
             continue
-        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 25 and predicted_class != 0:
+        if euclidean_distance(object_centroid, (bbox[3], bbox[4])) > 0 and predicted_class != 0:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, (bbox[3]), (bbox[4])])
         else:
             bboxes_to_return.append([x_min, y_min, x_max, y_max, confidence_score, predicted_class, object_centroid[0], object_centroid[1]])
