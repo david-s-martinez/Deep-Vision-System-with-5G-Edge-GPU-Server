@@ -1,4 +1,4 @@
-# Delta-Robot-AI
+# Deep-Vision-System-with-5G-Edge-GPU-Server
 Wheel detection based on CNNs and fiducial markers for plane detection. The frames are streamed from the delta controller using 5G.
 
 ![alt text](./assets/plane_detection_demo.gif)
