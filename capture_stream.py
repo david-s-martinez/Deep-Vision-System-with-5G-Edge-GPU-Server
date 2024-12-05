@@ -19,8 +19,7 @@ import cv2
 import math
 import numpy as np
 from conv_net_detect.test_model_Delta_v3 import *
-import Detection_models
-from plane_computation.plane_detection import PlaneDetection
+from plane_detector.plane_computation.plane_detection import PlaneDetection
 from multiprocessing import Process
 from multiprocessing import Pipe
 import torch.multiprocessing as mp
@@ -143,7 +142,7 @@ def robot_perception(percept_in_conn, percept_out_conn, config, use_cuda = True)
                         tag_scaling = config['plane']['tag_scaling'], 
                         box_z = config['plane']['z_tansl'],
                         tag_dict = config['plane']['tag_dict'])
-    model = Detection_models.DetectionModel(number_classes=NUMBER_CLASSES, grid_size_width=GRID_SIZE_WIDTH, grid_size_height=GRID_SIZE_HEIGHT,chosen_model=2)
+    model = DetectionModel(number_classes=NUMBER_CLASSES, grid_size_width=GRID_SIZE_WIDTH, grid_size_height=GRID_SIZE_HEIGHT,chosen_model=2)
     model.load_state_dict(torch.load(config['neural_net']['model_config'], map_location=torch.device(0)))
     
     # model = torch.load(config['neural_net']['model_config'],map_location=torch.device(0))
@@ -222,7 +221,7 @@ def post_detections(send_detect_in_conn, url_detections, is_post):
 if __name__ == '__main__':
 
     mp.set_start_method("spawn")
-    IS_ONLINE = True
+    IS_ONLINE = False
     TAG_TYPE = 'april'
     CAM_TYPE = 'rpi'
     MODEL_TYPE = 'mobnet'
@@ -230,7 +229,7 @@ if __name__ == '__main__':
     CAM_CONFIG_PATH = './vision_configs/'
     url_detections = 'http://10.41.0.2:5000/detections'
     MODEL = 'MOBILENET_V2_FINER_GRID_2_weights_saved.pt'if MODEL_TYPE == 'mobnet' else 'RESNET_18_FINER_GRID_2_weights_saved.pt'
-    cam_source = 'http://10.41.0.2:8080/?action=stream' if IS_ONLINE else 'delta_robot.mp4'
+    cam_source = 'http://10.41.0.2:8080/?action=stream' if IS_ONLINE else 'assets/delta_robot.mp4'
     
     path_dict = {
     'cam_matrix':{'rpi':CAM_CONFIG_PATH+'camera_matrix_rpi.txt',

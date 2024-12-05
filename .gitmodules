@@ -1,0 +1,3 @@
+[submodule "plane_detector"]
+	path = plane_detector
+	url = https://github.com/david-s-martinez/Automatic-Workspace-Calibration-Based-on-Aruco
